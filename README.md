@@ -45,6 +45,20 @@ AetherAgents/
 │       │   ├── README.md
 │       │   └── requirements.txt
 │       │
+│       ├── cli_generator/             # ✅ Generate CLI usage docs
+│       │   ├── generator.py           # Read config.yaml and render docs
+│       │   ├── service.py             # CLI entry point
+│       │   ├── templates/
+│       │   │   └── cli_usage.md.j2    # Markdown template
+│       │   ├── README.md
+│       │   └── requirements.txt
+│       │
+│       ├── build_packager/            # ✅ Validate and package apps
+│       │   ├── builder.py             # Syntax checks, dry-run deps, manifest
+│       │   ├── service.py             # CLI entry point
+│       │   ├── README.md
+│       │   └── requirements.txt
+│       │
 │       ├── (future subsystems)
 │       │   ├── user_management/       # Register, login, API keys, RBAC
 │       │   ├── app_validator/         # Validate structure & config
@@ -52,8 +66,6 @@ AetherAgents/
 │       │   ├── vm_health_checker/     # Monitor VM health via SSH/HTTP
 │       │   ├── app_health_checker/    # Monitor deployed app health
 │       │   ├── lifecycle_manager/     # Start, stop, restart, scale
-│       │   ├── cli_generator/         # Generate CLI usage docs
-│       │   ├── build_packager/        # Build & package apps
 │       │   └── notification_service/  # Email, webhook, dashboard push
 │       │
 │       └── __init__.py
@@ -76,6 +88,20 @@ AetherAgents/
 │       ├── models/
 │       │   └── email_model.py
 │       └── README.md
+│   └── study_planner/                 # Example: Study Planner Agent
+│       ├── main.py                    # CLI entry point
+│       ├── config.yaml                # Artifact definitions + distribution
+│       ├── requirements.txt
+│       ├── README.md
+│       ├── agents/
+│       │   └── study_planner_agent.py
+│       ├── tools/
+│       │   ├── goal_analyzer.py
+│       │   └── session_planner.py
+│       ├── orchestrators/
+│       │   └── study_pipeline.py
+│       └── models/
+│           └── study_model.py
 │
 ├── ARCHITECTURE.md                    # Full platform architecture spec
 ├── DEPLOYER.md                        # Deployment modes & runtime design
@@ -742,6 +768,8 @@ cat /tmp/test_main.py | head -50
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full platform architecture & subsystem specs
 - **[DEPLOYER.md](DEPLOYER.md)** — Deployment modes, runtime design, SSH orchestration
 - **[platform/subsystems/app_deployer/README.md](platform/subsystems/app_deployer/README.md)** — Detailed deployer guide
+- **[platform/subsystems/cli_generator/README.md](platform/subsystems/cli_generator/README.md)** — CLI usage doc generator guide
+- **[platform/subsystems/build_packager/README.md](platform/subsystems/build_packager/README.md)** — Build/package workflow guide
 
 ## Key Concepts
 
@@ -793,8 +821,8 @@ The deployer waits up to 30 seconds for each process to respond, then marks depl
 - [ ] VM Health Checker subsystem (real-time VM monitoring)
 - [ ] App Health Checker subsystem (monitor deployed app endpoints)
 - [ ] Lifecycle Manager subsystem (start, stop, scale, restart)
-- [ ] CLI Generator subsystem (generate usage documentation)
-- [ ] Build Packager subsystem (build from source, verify deps)
+- [x] CLI Generator subsystem (generate usage documentation)
+- [x] Build Packager subsystem (build from source, verify deps)
 - [ ] Notification Service subsystem (email, webhook, dashboard)
 - [ ] Web Dashboard (React/Vue UI for deployment & monitoring)
 - [ ] Mode C: Containerized deployment (Docker Compose generation)
