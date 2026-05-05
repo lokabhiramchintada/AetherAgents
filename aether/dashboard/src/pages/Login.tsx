@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { api, auth } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would hit the User Management service (/login)
-    console.log('Logging in with', username, password);
-    navigate('/dashboard');
+    setError(null);
+    setIsLoading(true);
+    try {
+      const data = await api.login({ username, password });
+      auth.setToken(data.token);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message ?? 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -20,26 +31,35 @@ export default function Login() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Username</label>
-            <input 
-              type="text" 
-              value={username} 
+            <input
+              type="text"
+              value={username}
               onChange={(e) => setUsername(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-              required 
+              required
             />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Password</label>
-            <input 
-              type="password" 
-              value={password} 
+            <input
+              type="password"
+              value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-              required 
+              required
             />
           </div>
-          <button type="submit" style={{ backgroundColor: '#2563eb', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', marginTop: '1rem' }}>
-            Sign In
+          {error && (
+            <div style={{ padding: '0.75rem', backgroundColor: '#fef2f2', color: '#991b1b', borderRadius: '4px', fontSize: '0.875rem' }}>
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={isLoading}
+            style={{ backgroundColor: isLoading ? '#9ca3af' : '#2563eb', color: 'white', padding: '0.75rem', border: 'none', borderRadius: '4px', cursor: isLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold', marginTop: '1rem' }}
+          >
+            {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
         <p style={{ textAlign: 'center', marginTop: '1rem' }}>
