@@ -1,0 +1,171 @@
+# ============================================================
+# Agentic AI App - Email Classifier Agent
+# Platform: Distributed Agentic AI Application Platform
+# ============================================================
+
+app:
+  name: email-classifier-agent
+  version: "1.0.0"
+  description: "Classifies, simplifies and prioritizes emails using AI"
+  author: "Platform"
+  runtime: python3.11
+
+# -------------------------------------------------------------------
+# Artifact Definitions (Models / Tools / Orchestrators / Agents)
+# -------------------------------------------------------------------
+artifacts:
+
+  models:
+    - id: email-llm-model
+      class: models.email_model.EmailLLMModel
+      type: llm
+      provider: google
+      model_id: gemini-2.5-flash
+      config:
+        max_tokens: 1024
+        temperature: 0.3
+
+  tools:
+    - id: text-simplifier
+      class: tools.text_simplifier.TextSimplifierTool
+      type: microservice
+      entry_point: tools/text_simplifier.py
+      interface: sync
+      input_schema:
+        raw_email: string
+      output_schema:
+        simplified: string
+
+    - id: email-categorizer
+      class: tools.email_categorizer.EmailCategorizerTool
+      type: microservice
+      entry_point: tools/email_categorizer.py
+      interface: sync
+      input_schema:
+        simplified_email: string
+      output_schema:
+        category: string
+        confidence: float
+
+    - id: priority-scorer
+      class: tools.priority_scorer.PriorityScorerTool
+      type: microservice
+      entry_point: tools/priority_scorer.py
+      interface: sync
+      input_schema:
+        simplified_email: string
+        category: string
+      output_schema:
+        priority: string     # HIGH / MEDIUM / LOW
+        score: int           # 1-10
+        reason: string
+
+  orchestrators:
+    - id: email-pipeline-orchestrator
+      class: orchestrators.email_pipeline.EmailPipelineOrchestrator
+      entry_point: orchestrators/email_pipeline.py
+      strategy: sequential   # sequential | parallel | conditional
+      steps:
+        - tool: text-simplifier
+        - tool: email-categorizer
+        - tool: priority-scorer
+
+  agents:
+    - id: email-classifier-agent
+      class: agents.email_classifier_agent.EmailClassifierAgent
+      entry_point: agents/email_classifier_agent.py
+      model: email-llm-model
+      orchestrator: email-pipeline-orchestrator
+      tools:
+        - text-simplifier
+        - email-categorizer
+        - priority-scorer
+
+# -------------------------------------------------------------------
+# Entry Points
+# -------------------------------------------------------------------
+entry_points:
+  cli: main.py
+  agent: agents/email_classifier_agent.py
+  orchestrator: orchestrators/email_pipeline.py
+
+# -------------------------------------------------------------------
+# Distribution Config
+# -------------------------------------------------------------------
+distribution:
+  mode: distributed          # local | distributed | containerized
+  topology: microservices
+
+  nodes:
+    - node_id: agent-node-1
+      role: agent
+      host: localhost
+      port: 8001
+      artifacts:
+        - email-classifier-agent
+
+    - node_id: tool-node-1
+      role: tools
+      host: localhost
+      port: 8002
+      artifacts:
+        - text-simplifier
+        - email-categorizer
+        - priority-scorer
+
+    - node_id: orchestrator-node-1
+      role: orchestrator
+      host: localhost
+      port: 8003
+      artifacts:
+        - email-pipeline-orchestrator
+
+  transport: http            # http | grpc | message_queue
+  serialization: json
+
+# -------------------------------------------------------------------
+# Platform Subsystems
+# -------------------------------------------------------------------
+platform:
+  user_management:
+    enabled: true
+    auth: api_key
+
+  app_registry:
+    enabled: true
+    registry_url: "http://localhost:9000/registry"
+
+  vm_health_checker:
+    enabled: true
+    interval_seconds: 30
+    endpoints:
+      - "http://localhost:8001/health"
+      - "http://localhost:8002/health"
+      - "http://localhost:8003/health"
+
+  validate_data:
+    enabled: true
+    strict_schema: true
+
+  app_deployer:
+    enabled: true
+    strategy: rolling          # rolling | blue-green | canary
+    health_check_timeout: 60
+
+# -------------------------------------------------------------------
+# Packaging
+# -------------------------------------------------------------------
+package:
+  format: tar.gz
+  include:
+    - models/
+    - agents/
+    - tools/
+    - orchestrators/
+    - main.py
+    - config.yaml
+    - requirements.txt
+  exclude:
+    - __pycache__/
+    - "*.pyc"
+    - .env
