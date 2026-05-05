@@ -12,3 +12,6 @@ downloads/
 eggs/
 .eggs/
 lib/
+node_modules/
+dist/
+
