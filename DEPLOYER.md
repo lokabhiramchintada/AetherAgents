@@ -146,3 +146,7 @@ EOF
 So your email classifier with 3 tools ends up as **6 processes total** across VMs. They all communicate over plain HTTP. The orchestrator calls `POST http://192.168.1.11:8101/run` instead of calling the tool in-process.
 
 The developer controls all of this through the `distribution.nodes` block in `config.yaml`. Your platform reads it, maps each node to an available VM, and deploys accordingly. Docker comes later — start with Python processes + systemd, it's far simpler to debug and perfectly scalable for your use case.
+
+
+Right now, main.py is hardcoded — it manually imports every artifact class by name. That's fine for one app, but your platform needs to deploy any app a developer uploads. You can't know in advance what classes they'll have.
+So the deployer needs to generate main.py at deploy time by reading config.yaml.
