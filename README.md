@@ -821,7 +821,7 @@ The deployer waits up to 30 seconds for each process to respond, then marks depl
 - [ ] App Validator subsystem (structure & config validation)
 - [ ] App Registry subsystem (store, version, search apps)
 - [ ] VM Health Checker subsystem (real-time VM monitoring)
-- [ ] App Health Checker subsystem (monitor deployed app endpoints)
+- [x] App Health Checker subsystem (monitor deployed app endpoints)
 - [ ] Lifecycle Manager subsystem (start, stop, scale, restart)
 - [x] CLI Generator subsystem (generate usage documentation)
 - [x] Build Packager subsystem (build from source, verify deps)
@@ -839,3 +839,4 @@ The deployer waits up to 30 seconds for each process to respond, then marks depl
 ## Contact
 
 For questions or contributions, contact the AetherAgents team.
+
