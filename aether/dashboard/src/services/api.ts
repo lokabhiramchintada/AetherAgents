@@ -1,226 +1,140 @@
 /**
  * API Service Configuration
-<<<<<<< HEAD
- * 
- * Once the FastAPI backends (App Registry, Validator, User Management, etc.) are 
- * ready, you can simply un-comment the `fetch` calls in these functions.
- * All functions are built to return Promises so the UI natively handles async DB/API calls.
- */
-
-// Update this to match your Gateway URL or specific microservice ports if not routing via Gateway
-const BASE_URL = 'http://localhost:8000';
-
-export const api = {
-  // --- USER MANAGEMENT ---
-  login: async (credentials: any) => {
-    // return fetch(`${BASE_URL}/login`, { method: 'POST', body: JSON.stringify(credentials) }).then(res => res.json());
-    
-    // MOCK:
-    return new Promise(resolve => setTimeout(() => resolve({ token: 'mock-jwt-token' }), 500));
-  },
-  
-  register: async (userData: any) => {
-    // return fetch(`${BASE_URL}/register`, { method: 'POST', body: JSON.stringify(userData) }).then(res => res.json());
-    
-    // MOCK:
-    return new Promise(resolve => setTimeout(() => resolve({ success: true }), 500));
-=======
  *
- * User Management runs on BASE_URL (port 8000) directly until the Gateway is built.
- * When Gateway is ready, it will proxy all routes — no frontend changes needed.
+ * User Management currently runs on BASE_URL directly.
+ * Gateway v1 endpoints are available under /v1 for deployment orchestration.
  */
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = "http://localhost:8000";
 
-// --- Token helpers (stored in localStorage) ---
 export const auth = {
-  getToken: (): string | null => localStorage.getItem('aether_token'),
-  setToken: (token: string) => localStorage.setItem('aether_token', token),
-  clearToken: () => localStorage.removeItem('aether_token'),
-  isLoggedIn: (): boolean => !!localStorage.getItem('aether_token'),
+  getToken: (): string | null => localStorage.getItem("aether_token"),
+  setToken: (token: string) => localStorage.setItem("aether_token", token),
+  clearToken: () => localStorage.removeItem("aether_token"),
+  isLoggedIn: (): boolean => !!localStorage.getItem("aether_token"),
 };
 
 function authHeaders(): HeadersInit {
   const token = auth.getToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+  return token
+    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
 }
 
 export const api = {
-  // --- USER MANAGEMENT ---
   login: async (credentials: { username: string; password: string }) => {
     const res = await fetch(`${BASE_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(err.detail ?? 'Login failed');
+      const err = await res.json().catch(() => ({ detail: "Login failed" }));
+      throw new Error(err.detail ?? "Login failed");
     }
-    return res.json(); // { token, token_type, user_id, username, role }
+    return res.json();
   },
 
   register: async (userData: { username: string; password: string; email?: string; role?: string }) => {
     const res = await fetch(`${BASE_URL}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(userData),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Registration failed' }));
-      throw new Error(err.detail ?? 'Registration failed');
+      const err = await res.json().catch(() => ({ detail: "Registration failed" }));
+      throw new Error(err.detail ?? "Registration failed");
     }
-    return res.json(); // UserResponse
+    return res.json();
   },
 
   getMe: async () => {
     const res = await fetch(`${BASE_URL}/me`, { headers: authHeaders() });
-    if (res.status === 401) throw new Error('UNAUTHORIZED');
-    if (!res.ok) throw new Error('Failed to fetch user profile');
-    return res.json(); // UserResponse
+    if (res.status === 401) throw new Error("UNAUTHORIZED");
+    if (!res.ok) throw new Error("Failed to fetch user profile");
+    return res.json();
   },
 
-  listApiKeys: async () => {
-    const res = await fetch(`${BASE_URL}/api-keys`, { headers: authHeaders() });
-    if (!res.ok) throw new Error('Failed to fetch API keys');
-    return res.json(); // APIKeyResponse[]
-  },
-
-  createApiKey: async (label: string = 'default') => {
-    const res = await fetch(`${BASE_URL}/api-keys`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ label }),
-    });
-    if (!res.ok) throw new Error('Failed to create API key');
-    return res.json(); // CreateAPIKeyFullResponse (includes plaintext key — store it!)
-  },
-
-  deleteApiKey: async (keyId: string) => {
-    const res = await fetch(`${BASE_URL}/api-keys/${keyId}`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error('Failed to revoke API key');
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-  },
-
-  // --- APP REGISTRY ---
   getApps: async () => {
-    // return fetch(`${BASE_URL}/apps/list`).then(res => res.json());
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    // MOCK:
-    return new Promise(resolve => setTimeout(() => resolve([
-      { id: 'app-001', name: 'Email Classifier', version: '1.0.0', status: 'Healthy', nodes: 2 },
-      { id: 'app-002', name: 'Data Scraper', version: '2.1.0', status: 'Degraded', nodes: 1 },
-    ]), 500));
+    return new Promise((resolve) =>
+      setTimeout(
+        () =>
+          resolve([
+            { id: "app-001", name: "Email Classifier", version: "1.0.0", status: "Healthy", nodes: 2 },
+            { id: "app-002", name: "Data Scraper", version: "2.1.0", status: "Degraded", nodes: 1 },
+          ]),
+        300
+      )
+    );
   },
 
   getAppDetails: async (id: string) => {
-    // return fetch(`${BASE_URL}/apps/${id}`).then(res => res.json());
-<<<<<<< HEAD
-    
-=======
+    const statusRes = await fetch(`${BASE_URL}/v1/apps/${id}/status`).catch(() => null);
+    if (statusRes && statusRes.ok) return statusRes.json();
 
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    // MOCK:
-    return new Promise(resolve => setTimeout(() => resolve({
-      id: id,
-      name: 'Email Classifier',
-      version: '1.0.0',
-      status: 'Healthy',
-      nodes: 2,
-      ram: '145 MB',
-      cpu: '2.4%',
-      endpoints: [
-        { name: 'CLI Usage', command: 'python main.py --help' },
-        { name: 'Health Check', url: `http://vm-001:8001/health` }
-      ]
-    }), 500));
+    return {
+      app_id: id,
+      registered: false,
+      message: "No deployment registered",
+    };
   },
 
-  // --- APP VALIDATOR & DEPLOYER ---
-<<<<<<< HEAD
-=======
-
-  /**
-   * Calls the App Validator subsystem via the Gateway.
-   * Gateway publishes to Kafka topic `app.upload`; Validator consumes and returns a ValidationReport.
-   * Endpoint (validator team to implement): POST /apps/validate
-   * Returns: { passed: boolean, errors: string[], warnings: string[] }
-   */
   validateApp: async (file: File): Promise<{ passed: boolean; errors: string[]; warnings: string[] }> => {
-    // REAL IMPLEMENTATION (un-comment when Gateway + App Validator are ready):
-    // const formData = new FormData();
-    // formData.append('file', file);
-    // return fetch(`${BASE_URL}/apps/validate`, {
-    //   method: 'POST',
-    //   body: formData,
-    // }).then(res => res.json());
-
-    // MOCK — simulates the ValidationReport the validator team will return:
-    await new Promise(r => setTimeout(r, 800));
-    return { passed: true, errors: [], warnings: [] };
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}/validate`, { method: "POST", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Validation failed" }));
+      throw new Error(err.detail ?? "Validation failed");
+    }
+    return res.json();
   },
 
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
   deployApp: async (file: File, onStatusUpdate: (status: string) => void) => {
-    // REAL IMPLEMENTATION:
-    // const formData = new FormData();
-    // formData.append('file', file);
-<<<<<<< HEAD
-    // 
-    // You might use WebSockets or Server-Sent Events here to get real-time status updates 
-    // from the Kafka queues (Validator -> Registry -> Deployer).
-    // 
-=======
-    //
-    // You might use WebSockets or Server-Sent Events here to get real-time status updates
-    // from the Kafka queues (Validator -> Registry -> Deployer).
-    //
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    // return fetch(`${BASE_URL}/apps/deploy`, { method: 'POST', body: formData }).then(res => res.json());
+    onStatusUpdate("Uploading ZIP to Gateway...");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("vm_pool_path", "infra/vm_pool.json");
+    formData.append("ssh_user", "ubuntu");
 
-    // MOCK (Simulating the pipeline flow):
-    onStatusUpdate('Uploading ZIP to Gateway...');
-    await new Promise(r => setTimeout(r, 800));
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    onStatusUpdate('App Validator: Checking structure & config...');
-    await new Promise(r => setTimeout(r, 1200));
-
-    onStatusUpdate('App Registry: Registering metadata & saving ZIP...');
-    await new Promise(r => setTimeout(r, 1000));
-<<<<<<< HEAD
-    
-    onStatusUpdate('App Deployer: Launching on VM pool...');
-    await new Promise(r => setTimeout(r, 1500));
-    
-=======
-
-    onStatusUpdate('App Deployer: Launching on VM pool...');
-    await new Promise(r => setTimeout(r, 1500));
-
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    return { success: true, appId: 'app-new' };
+    const res = await fetch(`${BASE_URL}/v1/apps/deploy/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Deploy failed" }));
+      throw new Error(JSON.stringify(err.detail ?? err));
+    }
+    onStatusUpdate("Deployment pipeline completed.");
+    return res.json();
   },
 
-  // --- LIFECYCLE MANAGER ---
-  appAction: async (id: string, action: 'start' | 'stop' | 'restart' | 'scale') => {
-    // return fetch(`${BASE_URL}/apps/${id}/${action}`, { method: 'POST' }).then(res => res.json());
-<<<<<<< HEAD
-    
-=======
+  deployFromSource: async (payload: {
+    source: string;
+    config_path?: string;
+    vm_pool_path?: string;
+    ssh_key?: string;
+    ssh_user?: string;
+  }) => {
+    const res = await fetch(`${BASE_URL}/v1/apps/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Deploy failed" }));
+      throw new Error(JSON.stringify(err.detail ?? err));
+    }
+    return res.json();
+  },
 
->>>>>>> 548cbe889a7fe77f016e788acbe264b536fb8d8d
-    // MOCK:
-    return new Promise(resolve => setTimeout(() => resolve({ success: true, message: `Command ${action} executed` }), 500));
-  }
+  appAction: async (id: string, action: "start" | "stop" | "restart") => {
+    const res = await fetch(`${BASE_URL}/apps/${id}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`Failed to ${action} app`);
+    return res.json();
+  },
 };

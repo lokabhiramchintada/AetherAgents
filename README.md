@@ -832,6 +832,14 @@ The deployer waits up to 30 seconds for each process to respond, then marks depl
 - [ ] Secrets management (vault integration)
 - [ ] Observability (Prometheus metrics, tracing)
 
+## Bootstrap
+
+Use the platform bootstrap script to bring up Kafka, master node, VM placeholders, Nginx, backend services, and dashboard:
+
+```bash
+bash scripts/bootstrap_platform.sh
+```
+
 ## License
 
 [LICENSE]

@@ -3,6 +3,8 @@ import shutil
 from typing import List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
+import zipfile
+from pathlib import Path
 
 app = FastAPI()
 
@@ -12,6 +14,33 @@ PLATFORM_DIR = os.path.join(BASE_DIR, "platform")
 
 os.makedirs(APPS_DIR, exist_ok=True)
 os.makedirs(PLATFORM_DIR, exist_ok=True)
+
+
+def register_package(app_id: str, app_version: str, zip_path: Path) -> dict:
+    """
+    Register a built app package in registry storage.
+    Stores ZIP under storage/apps/<app_id>/<app_version>/package.zip and extracts source/.
+    """
+    target_dir = safe_join(APPS_DIR, app_id, app_version)
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+    os.makedirs(target_dir, exist_ok=True)
+
+    package_path = safe_join(target_dir, "package.zip")
+    shutil.copy2(zip_path, package_path)
+
+    source_dir = safe_join(target_dir, "source")
+    os.makedirs(source_dir, exist_ok=True)
+    with zipfile.ZipFile(package_path, "r") as archive:
+        archive.extractall(source_dir)
+
+    return {
+        "status": "registered",
+        "app_id": app_id,
+        "app_version": app_version,
+        "package_path": package_path,
+        "source_dir": source_dir,
+    }
 
 
 # ----------------------------
@@ -153,3 +182,20 @@ def pull_platform(path: str = ""):
         "base_path": path,
         "files": read_directory(PLATFORM_DIR, target_path)
     }
+
+
+@app.post("/register/package")
+def register_package_endpoint(app_id: str = Form(...), app_version: str = Form(...), file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(400, "File must be a .zip archive")
+
+    temp_path = safe_join(BASE_DIR, f"tmp_{app_id}_{app_version}.zip")
+    with open(temp_path, "wb") as handle:
+        handle.write(file.file.read())
+
+    try:
+        result = register_package(app_id, app_version, Path(temp_path))
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+    return result

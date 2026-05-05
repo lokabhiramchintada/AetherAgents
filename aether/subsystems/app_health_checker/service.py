@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from typing import Dict, Optional
+import threading
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 from .models import AppHealthRecord, HealthStatus
 from .prober import AppHealthProber
 from .scheduler import HealthCheckScheduler
+from aether.kafka import topics
 
 logger = logging.getLogger("aether.app_health_checker.service")
 
@@ -34,6 +37,10 @@ class RegisterTargetRequest(BaseModel):
 class HealthCheckerService:
     def __init__(self, interval_seconds: int = 30, timeout_seconds: float = 3.0):
         self.records: Dict[str, AppHealthRecord] = {}
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        self._kafka_producer = None
+        self._consumer_thread: threading.Thread | None = None
+        self._consumer_stop = threading.Event()
         self.prober = AppHealthProber(timeout_seconds=timeout_seconds)
         self.scheduler = HealthCheckScheduler(
             registry=self.records,
@@ -41,6 +48,7 @@ class HealthCheckerService:
             on_probe=self._on_probe,
             interval_seconds=interval_seconds,
         )
+        self._init_kafka_producer()
 
     def _key(self, app_id: str, artifact_id: str, vm_ip: str, port: int) -> str:
         return f"{app_id}:{artifact_id}:{vm_ip}:{port}"
@@ -90,6 +98,90 @@ class HealthCheckerService:
                 record.endpoint,
                 record.consecutive_failures,
             )
+            self._publish_event(
+                topics.APP_UNHEALTHY,
+                {
+                    "event_type": "app.unhealthy",
+                    "app_id": record.app_id,
+                    "app_version": record.app_version,
+                    "artifact_id": record.artifact_id,
+                    "endpoint": record.endpoint,
+                    "failures": record.consecutive_failures,
+                    "detail": f"Artifact {record.artifact_id} is DOWN at {record.endpoint}",
+                },
+            )
+
+    def _init_kafka_producer(self) -> None:
+        try:
+            from kafka import KafkaProducer  # type: ignore
+
+            self._kafka_producer = KafkaProducer(
+                bootstrap_servers=self.kafka_bootstrap_servers,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                request_timeout_ms=5000,
+            )
+            logger.info("Kafka producer connected for health checker")
+        except Exception as exc:
+            self._kafka_producer = None
+            logger.warning("Kafka producer unavailable in health checker: %s", exc)
+
+    def _publish_event(self, topic: str, payload: dict) -> None:
+        if not self._kafka_producer:
+            return
+        try:
+            self._kafka_producer.send(topic, payload)
+        except Exception as exc:
+            logger.warning("Failed to publish event %s: %s", topic, exc)
+
+    def start_event_listener(self) -> None:
+        if self._consumer_thread and self._consumer_thread.is_alive():
+            return
+        self._consumer_stop.clear()
+        self._consumer_thread = threading.Thread(target=self._consume_loop, daemon=True)
+        self._consumer_thread.start()
+
+    def stop_event_listener(self) -> None:
+        self._consumer_stop.set()
+        if self._consumer_thread:
+            self._consumer_thread.join(timeout=2.0)
+
+    def _consume_loop(self) -> None:
+        try:
+            from kafka import KafkaConsumer  # type: ignore
+
+            consumer = KafkaConsumer(
+                topics.APP_DEPLOYED,
+                bootstrap_servers=self.kafka_bootstrap_servers,
+                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                auto_offset_reset="latest",
+                enable_auto_commit=True,
+                group_id="aether-app-health-checker",
+            )
+        except Exception as exc:
+            logger.warning("Kafka consumer unavailable in health checker: %s", exc)
+            return
+
+        while not self._consumer_stop.is_set():
+            message_pack = consumer.poll(timeout_ms=1000)
+            for _tp, messages in message_pack.items():
+                for message in messages:
+                    payload = message.value or {}
+                    if payload.get("event_type") != "app.deployed":
+                        continue
+                    deployment = payload.get("deployment", {})
+                    app_id = deployment.get("app_id")
+                    app_version = deployment.get("app_version", "unknown")
+                    for process in deployment.get("process_records", []):
+                        req = RegisterTargetRequest(
+                            app_id=app_id,
+                            app_version=app_version,
+                            artifact_id=process.get("artifact_id", ""),
+                            vm_ip=process.get("vm_ip", ""),
+                            port=process.get("port", 0),
+                        )
+                        self.register(req)
+                        logger.info("Auto-registered target from app.deployed: %s/%s", app_id, req.artifact_id)
+        consumer.close()
 
 
 app = FastAPI(title="Aether App Health Checker", version="1.0.0")
@@ -99,11 +191,13 @@ svc = HealthCheckerService()
 @app.on_event("startup")
 def startup_event() -> None:
     svc.scheduler.start()
+    svc.start_event_listener()
 
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
     svc.scheduler.stop()
+    svc.stop_event_listener()
 
 
 @app.post("/health/targets")

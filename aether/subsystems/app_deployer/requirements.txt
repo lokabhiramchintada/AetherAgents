@@ -9,3 +9,4 @@ requests==2.31.0         # HTTP requests for health checks
 
 # Optional but recommended
 python-dotenv==1.0.0     # Environment variable loading
+kafka-python==2.0.2      # Internal subsystem event bus

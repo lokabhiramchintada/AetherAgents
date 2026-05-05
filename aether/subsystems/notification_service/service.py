@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from typing import Optional
+import asyncio
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from .channels import SMTPEmailChannel, SMTPSettings
+from aether.kafka import topics
 
 logger = logging.getLogger("aether.notification_service")
 
@@ -67,8 +70,61 @@ class NotificationService:
             )
         )
 
+    def send_platform_event(self, payload: dict) -> None:
+        alert_email = os.getenv("AETHER_ALERT_EMAIL", "")
+        if not alert_email:
+            return
+        request = PlatformEventRequest(
+            event_type=payload.get("event_type", "platform.event"),
+            recipient_email=alert_email,
+            app_id=payload.get("app_id", "unknown"),
+            app_version=payload.get("app_version"),
+            detail=payload.get("detail"),
+        )
+        self.send_event_email(request)
 
-app = FastAPI(title="Aether Notification Service", version="1.0.0")
+
+class KafkaNotificationConsumer:
+    def __init__(self, service: NotificationService):
+        self.service = service
+
+    async def consume(self) -> None:
+        try:
+            from kafka import KafkaConsumer  # type: ignore
+        except Exception as exc:
+            logger.warning("Kafka unavailable in notification service: %s", exc)
+            return
+
+        consumer = KafkaConsumer(
+            topics.APP_UNHEALTHY,
+            topics.APP_LIFECYCLE,
+            topics.APP_DEPLOYED,
+            bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            auto_offset_reset="latest",
+            enable_auto_commit=True,
+            group_id="aether-notification-service",
+        )
+        try:
+            while True:
+                message_pack = consumer.poll(timeout_ms=1000)
+                for _tp, messages in message_pack.items():
+                    for message in messages:
+                        payload = message.value or {}
+                        self.service.send_platform_event(payload)
+                await asyncio.sleep(0.05)
+        finally:
+            consumer.close()
+
+
+async def app_lifespan(app: FastAPI):
+    consumer = KafkaNotificationConsumer(svc)
+    task = asyncio.create_task(consumer.consume())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Aether Notification Service", version="1.0.0", lifespan=app_lifespan)
 svc = NotificationService()
 
 

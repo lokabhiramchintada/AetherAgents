@@ -28,6 +28,7 @@ from .deployer import AppDeployer, SSHConnection
 from .process_manager import ProcessManager, ServiceConfig
 from .runtime_generator import RuntimeGenerator
 from .models import DeploymentRecord, DeploymentStatus, ProcessRecord, ProcessStatus
+from aether.kafka import topics
 
 logger = logging.getLogger("aether.deployer.service")
 
@@ -49,6 +50,7 @@ class AppDeployerService:
         runtime_generator: Optional[RuntimeGenerator] = None,
         distributor: Optional[Distributor] = None,
         app_health_checker_base_url: Optional[str] = None,
+        lifecycle_manager_base_url: Optional[str] = None,
     ):
         """Initialize service with optional dependency injection."""
         self.runtime_generator = runtime_generator or RuntimeGenerator()
@@ -57,6 +59,13 @@ class AppDeployerService:
             app_health_checker_base_url
             or os.getenv("AETHER_APP_HEALTH_CHECKER_URL", "http://localhost:8015")
         ).rstrip("/")
+        self.lifecycle_manager_base_url = (
+            lifecycle_manager_base_url
+            or os.getenv("AETHER_LIFECYCLE_MANAGER_URL", "http://localhost:8016")
+        ).rstrip("/")
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        self._kafka_producer = None
+        self._init_kafka_producer()
 
     def deploy(
         self,
@@ -103,7 +112,7 @@ class AppDeployerService:
                     ssh_user=ssh_user,
                 )
 
-            self._register_deployment_with_health_checker(deployment)
+            self._publish_deployed_event(deployment)
 
             deployment.status = DeploymentStatus.SUCCEEDED
             logger.info("Deployment succeeded")
@@ -112,6 +121,15 @@ class AppDeployerService:
             logger.error("Deployment failed: %s", exc)
             deployment.status = DeploymentStatus.FAILED
             deployment.error_message = str(exc)
+            self._publish_event(
+                topics.APP_LIFECYCLE,
+                {
+                    "event_type": "deployment.failed",
+                    "app_id": app_id,
+                    "app_version": app_version,
+                    "detail": str(exc),
+                },
+            )
             raise
 
         return deployment
@@ -160,6 +178,59 @@ class AppDeployerService:
                     process.artifact_id,
                     exc,
                 )
+
+    def _register_deployment_with_lifecycle_manager(self, deployment: DeploymentRecord) -> None:
+        endpoint = f"{self.lifecycle_manager_base_url}/apps/{deployment.app_id}/register"
+        payload = {
+            "app_id": deployment.app_id,
+            "app_version": deployment.app_version,
+            "process_records": [p.to_dict() for p in deployment.process_records],
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            endpoint,
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with request.urlopen(req, timeout=3.0):
+                logger.info("Registered deployment with lifecycle manager: %s", deployment.app_id)
+        except error.URLError as exc:
+            logger.warning("Unable to register with lifecycle manager (%s): %s", deployment.app_id, exc)
+
+    def _init_kafka_producer(self) -> None:
+        try:
+            from kafka import KafkaProducer  # type: ignore
+
+            self._kafka_producer = KafkaProducer(
+                bootstrap_servers=self.kafka_bootstrap_servers,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                request_timeout_ms=5000,
+            )
+            logger.info("Kafka producer connected: %s", self.kafka_bootstrap_servers)
+        except Exception as exc:
+            self._kafka_producer = None
+            logger.warning("Kafka unavailable in deployer (%s). Events will be skipped.", exc)
+
+    def _publish_event(self, topic: str, payload: dict) -> None:
+        if not self._kafka_producer:
+            return
+        try:
+            self._kafka_producer.send(topic, payload)
+        except Exception as exc:
+            logger.warning("Failed to publish event %s: %s", topic, exc)
+
+    def _publish_deployed_event(self, deployment: DeploymentRecord) -> None:
+        self._publish_event(
+            topics.APP_DEPLOYED,
+            {
+                "event_type": "app.deployed",
+                "app_id": deployment.app_id,
+                "app_version": deployment.app_version,
+                "deployment": deployment.to_dict(),
+            },
+        )
 
     def _group_nodes_by_vm(self, nodes: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         grouped = {}
@@ -253,13 +324,17 @@ def main() -> int:
     parser.add_argument("--key", type=Path, help="SSH private key")
     parser.add_argument("--user", default="ubuntu", help="SSH user")
     parser.add_argument("--health-checker-url", default=None, help="Base URL for app health checker")
+    parser.add_argument("--lifecycle-url", default=None, help="Base URL for lifecycle manager")
     parser.add_argument("--output", type=Path, help="Save deployment record to JSON")
 
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
 
-    service = AppDeployerService(app_health_checker_base_url=args.health_checker_url)
+    service = AppDeployerService(
+        app_health_checker_base_url=args.health_checker_url,
+        lifecycle_manager_base_url=args.lifecycle_url,
+    )
     deployment = service.deploy(
         app_id=args.app_id,
         app_version=args.app_version,
