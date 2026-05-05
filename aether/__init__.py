@@ -1,5 +1,5 @@
 """
-platform
+aether
 
 Distributed Agentic AI Application Platform.
 
@@ -8,8 +8,8 @@ Core modules:
   - subsystems: Standalone platform services
 
 Public API:
-  from platform.core import BaseAgent, BaseTool, BaseOrchestrator, BaseModel
-  from platform.subsystems.app_deployer import AppDeployerService
+  from aether.core import BaseAgent, BaseTool, BaseOrchestrator, BaseModel
+  from aether.subsystems.app_deployer import AppDeployerService
 """
 
 __version__ = "0.1.0"

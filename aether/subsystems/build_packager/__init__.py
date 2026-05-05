@@ -1,5 +1,5 @@
 """
-platform.subsystems.build_packager
+aether.subsystems.build_packager
 
 Build and package Aether applications into validated .aether.zip archives.
 """

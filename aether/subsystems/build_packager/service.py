@@ -1,15 +1,53 @@
 """
 service.py
 
-Command-line entry point for the build packager.
+HTTP + CLI entry point for the build packager.
 """
 
 import json
 import logging
 import sys
 from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from .builder import BuildPackager
+
+
+class BuildRequest(BaseModel):
+    source: str = Field(..., description="Path to a local app directory, ZIP, or git repo URL")
+    output: Optional[str] = Field(default=None, description="Optional output .aether.zip path")
+    skip_dependency_check: bool = Field(default=False, description="Skip dependency dry-run")
+    skip_syntax_check: bool = Field(default=False, description="Skip Python syntax validation")
+
+
+class BuildResponse(BaseModel):
+    output_path: str
+    source_path: str
+    manifest: dict[str, Any]
+    build_messages: list[str]
+
+
+app = FastAPI(title="Aether Build Packager", version="1.0.0")
+
+
+@app.post("/apps/build", response_model=BuildResponse)
+def build_app(request: BuildRequest) -> BuildResponse:
+    packager = BuildPackager()
+
+    try:
+        result = packager.build(
+            request.source,
+            Path(request.output) if request.output else None,
+            skip_dependency_check=request.skip_dependency_check,
+            skip_syntax_check=request.skip_syntax_check,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return BuildResponse(**result.to_dict())
 
 
 def main() -> int:

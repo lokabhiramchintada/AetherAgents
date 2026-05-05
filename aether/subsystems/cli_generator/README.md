@@ -12,7 +12,7 @@
 ## Quick start
 
 ```bash
-python -m platform.subsystems.cli_generator.service apps/email_classifier/config.yaml --output apps/email_classifier/CLI_USAGE.md
+python -m aether.subsystems.cli_generator.service apps/email_classifier/config.yaml --output apps/email_classifier/CLI_USAGE.md
 ```
 
 ## Output

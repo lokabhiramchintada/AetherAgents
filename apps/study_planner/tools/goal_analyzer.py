@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from platform.core.base_tool import BaseTool, ToolCategory, ToolMeta, ToolParam, ToolResult, ToolSchema, ToolStatus
+from aether.core.base_tool import BaseTool, ToolCategory, ToolMeta, ToolParam, ToolResult, ToolSchema, ToolStatus
 
 
 class GoalAnalyzerTool(BaseTool):

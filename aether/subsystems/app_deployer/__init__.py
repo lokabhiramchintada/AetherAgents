@@ -1,5 +1,5 @@
 """
-platform/subsystems/app_deployer
+aether/subsystems/app_deployer
 
 Orchestrates deployment of Aether applications across a VM pool.
 
@@ -8,10 +8,11 @@ Subsystems:
   - Distributor: Maps distribution nodes to available VMs
   - AppDeployer: SSH/SCP/pip installation
   - ProcessManager: Systemd service generation and launching
+  - RollbackManager: Stub for restoring previous app versions
   - AppDeployerService: Main orchestration service
 
 Public API:
-  from platform.subsystems.app_deployer import AppDeployerService
+  from aether.subsystems.app_deployer import AppDeployerService
   
   service = AppDeployerService()
   deployment = service.deploy(
@@ -35,6 +36,7 @@ from .runtime_generator import RuntimeGenerator
 from .distributor import Distributor
 from .deployer import AppDeployer, SSHConnection
 from .process_manager import ProcessManager, SystemdServiceGenerator, ServiceConfig
+from .rollback import RollbackManager, RollbackRequest
 from .service import AppDeployerService
 
 __all__ = [
@@ -53,5 +55,7 @@ __all__ = [
     "SSHConnection",
     "ProcessManager",
     "SystemdServiceGenerator",
+    "RollbackManager",
+    "RollbackRequest",
     "AppDeployerService",
 ]

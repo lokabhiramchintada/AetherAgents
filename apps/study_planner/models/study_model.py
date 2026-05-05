@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from platform.core.base_model import BaseModel, ModelMeta, ModelResponse, ModelType, ModelStatus
+from aether.core.base_model import BaseModel, ModelMeta, ModelResponse, ModelType, ModelStatus
 
 
 class StudyPlanModel(BaseModel):

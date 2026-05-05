@@ -1,5 +1,5 @@
 """
-platform/core/tools/base_tool.py
+aether/core/tools/base_tool.py
 
 Base class for all Tool artifacts on the Distributed Agentic AI Platform.
 

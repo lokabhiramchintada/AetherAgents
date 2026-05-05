@@ -7,7 +7,7 @@
 ```
 AetherAgents/
 │
-├── platform/                          # Platform codebase (you own this)
+├── aether/                          # Platform codebase (you own this)
 │   ├── core/                          # Base artifact classes (already built)
 │   │   ├── __init__.py
 │   │   ├── base_model.py
@@ -81,9 +81,8 @@ AetherAgents/
 │   │   │
 │   │   ├── build_packager/            # NEW — builds + packages apps
 │   │   │   ├── __init__.py
-│   │   │   ├── service.py
 │   │   │   ├── builder.py             # pip install, compile checks
-│   │   │   └── packager.py            # Creates .aether.zip with manifest
+│   │   │   └── service.py             # POST /apps/build + CLI wrapper
 │   │   │
 │   │   └── notification_service/      # NEW — sends events to developer
 │   │       ├── __init__.py
@@ -260,6 +259,7 @@ This is sent to the developer via dashboard + email.
 - Runs Python syntax check on all `.py` files (`py_compile`)
 - Packages into a validated `.aether.zip` with a `manifest.json` injected
 - Developer can build locally then upload, OR platform can build from source
+- Exposed as a FastAPI service in `aether/subsystems/build_packager/service.py`
 
 ### 10. Notification Service (added)
 - Subscribes to all major Kafka topics
@@ -474,3 +474,4 @@ load_balancer:
 | PostgreSQL             | 5432  |
 
 All subsystems are internal; only port 8000 (gateway) and 3000 (dashboard) are exposed externally.
+

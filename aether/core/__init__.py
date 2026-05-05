@@ -1,12 +1,12 @@
 """
-platform/core/__init__.py
+aether/core/__init__.py
 
 Single import surface for the Distributed Agentic AI Application Platform
 base classes. App developers import from here.
 
 Usage
 -----
-    from platform.core import (
+    from aether.core import (
         BaseModel, ModelMeta, ModelResponse,
         BaseTool, ToolMeta, ToolResult, ToolSchema, ToolParam,
         BaseOrchestrator, OrchestratorMeta, OrchestratorStep, PipelineStrategy,

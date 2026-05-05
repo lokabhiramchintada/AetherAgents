@@ -8,11 +8,22 @@
 - Runs a Python syntax check across all `.py` files
 - Runs a pip dependency dry-run against `requirements.txt`
 - Packages the app into a distributable `.aether.zip`
+- Exposes an HTTP build endpoint at `POST /apps/build`
 
 ## Quick start
 
 ```bash
-python -m platform.subsystems.build_packager.service apps/email_classifier --output dist/email_classifier.aether.zip
+python -m aether.subsystems.build_packager.service apps/email_classifier --output dist/email_classifier.aether.zip
+```
+
+## HTTP API
+
+```bash
+POST /apps/build
+{
+	"source": "apps/email_classifier",
+	"output": "dist/email_classifier.aether.zip"
+}
 ```
 
 ## Input support

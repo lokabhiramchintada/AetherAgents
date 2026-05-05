@@ -1,5 +1,5 @@
 """
-platform.subsystems.cli_generator
+aether.subsystems.cli_generator
 
 Generate human-readable CLI usage documentation from an app's config.yaml.
 """

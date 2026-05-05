@@ -95,7 +95,7 @@ email-classifier-agent.zip
 ### 3. Platform Calls Deployer
 
 ```python
-from platform.subsystems.app_deployer import AppDeployerService
+from aether.subsystems.app_deployer import AppDeployerService
 
 service = AppDeployerService()
 deployment = service.deploy(
@@ -129,7 +129,7 @@ Reads artifact declarations and generates a FastAPI server that:
 
 ```bash
 # Generate runtime from config.yaml
-python -m platform.subsystems.app_deployer.runtime_generator \
+python -m aether.subsystems.app_deployer.runtime_generator \
     apps/email-classifier-agent/config.yaml \
     --output apps/email-classifier-agent/_aether_main.py
 ```
@@ -194,7 +194,7 @@ Reads `distribution.nodes` and maps each to a healthy VM from the pool.
 #### Usage
 
 ```python
-from platform.subsystems.app_deployer import Distributor
+from aether.subsystems.app_deployer import Distributor
 
 distributor = Distributor()
 distribution = distributor.distribute(
@@ -228,7 +228,7 @@ Handles SSH connection, SCP upload, unzip, virtualenv, and pip install.
 #### Usage
 
 ```python
-from platform.subsystems.app_deployer import AppDeployer, SSHConnection
+from aether.subsystems.app_deployer import AppDeployer, SSHConnection
 
 ssh = SSHConnection(
     hostname="192.168.1.10",
@@ -285,7 +285,7 @@ WantedBy=multi-user.target
 #### Usage
 
 ```python
-from platform.subsystems.app_deployer import ProcessManager, ServiceConfig
+from aether.subsystems.app_deployer import ProcessManager, ServiceConfig
 
 ssh = SSHConnection("192.168.1.10", "ubuntu")
 
@@ -320,7 +320,7 @@ High-level API that orchestrates all components.
 #### Usage
 
 ```python
-from platform.subsystems.app_deployer import AppDeployerService
+from aether.subsystems.app_deployer import AppDeployerService
 from pathlib import Path
 
 service = AppDeployerService()
@@ -411,7 +411,7 @@ After deployment, emit Kafka events:
 ### Runtime Generator
 
 ```bash
-python -m platform.subsystems.app_deployer.runtime_generator \
+python -m aether.subsystems.app_deployer.runtime_generator \
     config.yaml \
     --output _aether_main.py
 ```
@@ -419,7 +419,7 @@ python -m platform.subsystems.app_deployer.runtime_generator \
 ### Distributor
 
 ```bash
-python -m platform.subsystems.app_deployer.distributor \
+python -m aether.subsystems.app_deployer.distributor \
     config.yaml \
     --vm-pool vm_pool.json \
     --output augmented_config.json
@@ -428,7 +428,7 @@ python -m platform.subsystems.app_deployer.distributor \
 ### AppDeployer
 
 ```bash
-python -m platform.subsystems.app_deployer.deployer \
+python -m aether.subsystems.app_deployer.deployer \
     192.168.1.10 \
     --username ubuntu \
     --key ~/.ssh/id_rsa \
@@ -441,7 +441,7 @@ python -m platform.subsystems.app_deployer.deployer \
 ### ProcessManager
 
 ```bash
-python -m platform.subsystems.app_deployer.process_manager \
+python -m aether.subsystems.app_deployer.process_manager \
     192.168.1.10 \
     --username ubuntu \
     --key ~/.ssh/id_rsa \
@@ -456,7 +456,7 @@ python -m platform.subsystems.app_deployer.process_manager \
 ### Full Deployment Service
 
 ```bash
-python -m platform.subsystems.app_deployer.service \
+python -m aether.subsystems.app_deployer.service \
     --app-id email-classifier-agent \
     --app-version 1.0.0 \
     --zip dist/email-classifier-agent-1.0.0.zip \
@@ -515,7 +515,7 @@ If `/health` endpoint doesn't respond within timeout:
 Quick usage to regenerate runtime (example):
 
 ```bash
-python -m platform.subsystems.app_deployer.runtime_generator \
+python -m aether.subsystems.app_deployer.runtime_generator \
     apps/email_classifier/config.yaml \
     --output apps/email_classifier/_aether_main.py
 ```

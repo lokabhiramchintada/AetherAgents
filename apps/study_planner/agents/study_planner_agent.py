@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from platform.core.base_agent import AgentLoopMode, AgentMeta, AgentResponse, AgentStatus, BaseAgent, RunStatus
+from aether.core.base_agent import AgentLoopMode, AgentMeta, AgentResponse, AgentStatus, BaseAgent, RunStatus
 
 from models.study_model import StudyPlanModel
 from orchestrators.study_pipeline import StudyPipelineOrchestrator

@@ -24,7 +24,7 @@ AetherAgents is a **production-ready platform** for:
 ```
 AetherAgents/
 │
-├── platform/                          # Platform codebase (production)
+├── aether/                          # Platform codebase (production)
 │   ├── core/                          # Base artifact classes
 │   │   ├── base_agent.py              # Agent abstract base
 │   │   ├── base_tool.py               # Tool abstract base
@@ -38,6 +38,7 @@ AetherAgents/
 │       │   ├── distributor.py         # Map nodes to VMs
 │       │   ├── deployer.py            # SSH/SCP/pip orchestration
 │       │   ├── process_manager.py     # Systemd service lifecycle
+│       │   ├── rollback.py            # Rollback stub
 │       │   ├── service.py             # Main orchestrator API
 │       │   ├── models.py              # Data models
 │       │   ├── templates/
@@ -55,7 +56,7 @@ AetherAgents/
 │       │
 │       ├── build_packager/            # ✅ Validate and package apps
 │       │   ├── builder.py             # Syntax checks, dry-run deps, manifest
-│       │   ├── service.py             # CLI entry point
+│       │   ├── service.py             # HTTP + CLI entry point
 │       │   ├── README.md
 │       │   └── requirements.txt
 │       │
@@ -110,7 +111,7 @@ AetherAgents/
 
 ## Platform Components
 
-### Core Artifact Classes (`platform/core/`)
+### Core Artifact Classes (`aether/core/`)
 
 Base classes for all artifact types:
 
@@ -159,7 +160,7 @@ python main.py --email sample_email.txt
 # ═══════════════════════════════════════════════════════════════
 ```
 
-## Deployment Subsystem (`platform/subsystems/app_deployer/`)
+## Deployment Subsystem (`aether/subsystems/app_deployer/`)
 
 ✅ **Complete & Production-Ready**
 
@@ -186,7 +187,7 @@ Orchestrates end-to-end deployment of Aether applications across a VM pool.
 ### Quick Start
 
 ```python
-from platform.subsystems.app_deployer import AppDeployerService
+from aether.subsystems.app_deployer import AppDeployerService
 from pathlib import Path
 
 service = AppDeployerService()
@@ -362,26 +363,26 @@ Each component is independently testable:
 
 ```bash
 # Generate runtime from config
-python -m platform.subsystems.app_deployer.runtime_generator \
+python -m aether.subsystems.app_deployer.runtime_generator \
     config.yaml --output _aether_main.py
 
 # Distribute nodes to VMs
-python -m platform.subsystems.app_deployer.distributor \
+python -m aether.subsystems.app_deployer.distributor \
     config.yaml --vm-pool vm_pool.json
 
 # Deploy to a single VM
-python -m platform.subsystems.app_deployer.deployer \
+python -m aether.subsystems.app_deployer.deployer \
     192.168.1.10 --username ubuntu --key ~/.ssh/id_rsa \
     --app-id email-classifier-agent --app-version 1.0.0 \
     --zip app.zip --config config.yaml
 
 # Manage systemd services
-python -m platform.subsystems.app_deployer.process_manager \
+python -m aether.subsystems.app_deployer.process_manager \
     192.168.1.10 --action start \
     --app-id email-classifier-agent --artifact-id text-simplifier
 
 # Full deployment end-to-end
-python -m platform.subsystems.app_deployer.service \
+python -m aether.subsystems.app_deployer.service \
     --app-id email-classifier-agent \
     --app-version 1.0.0 \
     --zip dist/app.zip \
@@ -561,6 +562,7 @@ The following subsystems are designed but not yet implemented:
 - Syntax check all Python files
 - Create validated .aether.zip with manifest
 - Dry-run pip install to verify dependencies
+- Expose `POST /apps/build` for platform automation
 
 ### Notification Service
 - Subscribe to platform Kafka topics
@@ -658,7 +660,7 @@ DeploymentRecord with ProcessRecords
 ### Deploy Application
 
 ```python
-from platform.subsystems.app_deployer import AppDeployerService
+from aether.subsystems.app_deployer import AppDeployerService
 from pathlib import Path
 import json
 
@@ -752,7 +754,7 @@ python _aether_main.py --role agent --port 8000
 
 ```bash
 # 1. Generate runtime
-python -m platform.subsystems.app_deployer.runtime_generator \
+python -m aether.subsystems.app_deployer.runtime_generator \
     apps/email_classifier/config.yaml \
     --output /tmp/test_main.py
 
@@ -767,9 +769,9 @@ cat /tmp/test_main.py | head -50
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full platform architecture & subsystem specs
 - **[DEPLOYER.md](DEPLOYER.md)** — Deployment modes, runtime design, SSH orchestration
-- **[platform/subsystems/app_deployer/README.md](platform/subsystems/app_deployer/README.md)** — Detailed deployer guide
-- **[platform/subsystems/cli_generator/README.md](platform/subsystems/cli_generator/README.md)** — CLI usage doc generator guide
-- **[platform/subsystems/build_packager/README.md](platform/subsystems/build_packager/README.md)** — Build/package workflow guide
+- **[aether/subsystems/app_deployer/README.md](aether/subsystems/app_deployer/README.md)** — Detailed deployer guide
+- **[aether/subsystems/cli_generator/README.md](aether/subsystems/cli_generator/README.md)** — CLI usage doc generator guide
+- **[aether/subsystems/build_packager/README.md](aether/subsystems/build_packager/README.md)** — Build/package workflow guide
 
 ## Key Concepts
 

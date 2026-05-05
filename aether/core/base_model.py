@@ -1,5 +1,5 @@
 """
-platform/core/models/base_model.py
+aether/core/models/base_model.py
 
 Base class for all Model artifacts on the Distributed Agentic AI Platform.
 

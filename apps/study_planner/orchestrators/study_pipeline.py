@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from platform.core.base_orchestrator import BaseOrchestrator, OrchestratorMeta, OrchestratorStep, PipelineStrategy, OrchestratorStatus
+from aether.core.base_orchestrator import BaseOrchestrator, OrchestratorMeta, OrchestratorStep, PipelineStrategy, OrchestratorStatus
 
 from tools.goal_analyzer import GoalAnalyzerTool
 from tools.session_planner import SessionPlannerTool

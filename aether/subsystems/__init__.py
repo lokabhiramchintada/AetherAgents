@@ -1,5 +1,5 @@
 """
-platform/subsystems
+aether/subsystems
 
 Container for all platform subsystems:
   - app_deployer: Deploy applications across VMs

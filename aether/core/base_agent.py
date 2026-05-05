@@ -1,5 +1,5 @@
 """
-platform/core/agents/base_agent.py
+aether/core/agents/base_agent.py
 
 Base class for all Agent artifacts on the Distributed Agentic AI Platform.
 
