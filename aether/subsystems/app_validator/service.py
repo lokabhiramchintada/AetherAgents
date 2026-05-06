@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import zipfile
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .report import ValidationReport
@@ -13,6 +14,19 @@ app = FastAPI(
     title="AetherAgents App Validator",
     description="Validates uploaded AI apps (ZIP) before they go to the registry.",
     version="1.0.0"
+)
+
+allowed_origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:5173",
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mocked: You can expand these imports over time
@@ -31,7 +45,8 @@ async def validate_app_zip(file: UploadFile = File(...)):
     Receives a .zip file, unzips it temporarily, runs all structure, config, 
     and metadata checks, then returns the Validation Report.
     """
-    if not file.filename.endswith(".zip"):
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="Uploaded file must be a .zip archive.")
 
     # 1. Setup a temporary directory for unzipping

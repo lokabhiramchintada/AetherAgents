@@ -8,6 +8,9 @@ export default function Deploy() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [isValidating, setIsValidating] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
+  const [skipDependencyCheck, setSkipDependencyCheck] = useState(true);
+  const [skipSyntaxCheck, setSkipSyntaxCheck] = useState(false);
   const [validationResult, setValidationResult] = useState<{
     passed: boolean;
     errors: string[];
@@ -33,12 +36,17 @@ export default function Deploy() {
     if (!file) return;
 
     setIsDeploying(true);
+    setDeployError(null);
     try {
-      await api.deployApp(file, (newStatus) => setStatus(newStatus));
+      await api.deployApp(file, (newStatus) => setStatus(newStatus), {
+        skipDependencyCheck,
+        skipSyntaxCheck,
+      });
       alert("Deployment successful!");
       navigate("/dashboard");
     } catch (error) {
       console.error("Deployment failed", error);
+      setDeployError(error instanceof Error ? error.message : "Deployment failed");
       setStatus("Deployment failed.");
     } finally {
       setIsDeploying(false);
@@ -142,6 +150,12 @@ export default function Deploy() {
             </div>
           )}
 
+          {deployError && (
+            <div style={{ padding: "1rem", backgroundColor: "#fef2f2", color: "#991b1b", borderRadius: "4px" }}>
+              {deployError}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={buttonDisabled}
@@ -159,6 +173,20 @@ export default function Deploy() {
             {isDeploying ? "Deploying..." : "Deploy App"}
           </button>
         </form>
+        <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={skipDependencyCheck}
+              onChange={(e) => setSkipDependencyCheck(e.target.checked)}
+            />
+            Skip dependency check (useful when offline)
+          </label>
+          <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <input type="checkbox" checked={skipSyntaxCheck} onChange={(e) => setSkipSyntaxCheck(e.target.checked)} />
+            Skip syntax check
+          </label>
+        </div>
       </div>
     </div>
   );

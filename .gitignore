@@ -14,3 +14,8 @@ eggs/
 lib/
 node_modules/
 dist/
+.venv/
+venv/
+.run/
+*.zip
+log.txt

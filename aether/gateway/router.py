@@ -143,8 +143,11 @@ async def deploy_pipeline_upload(
     vm_pool_path: str = Form("infra/vm_pool.json"),
     ssh_key: Optional[str] = Form(None),
     ssh_user: str = Form("ubuntu"),
+    skip_dependency_check: bool = Form(False),
+    skip_syntax_check: bool = Form(False),
 ) -> dict:
-    if not file.filename.lower().endswith(".zip"):
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="Uploaded file must be .zip")
 
     temp_dir = tempfile.mkdtemp(prefix="aether-gateway-upload-")
@@ -158,6 +161,8 @@ async def deploy_pipeline_upload(
             vm_pool_path=vm_pool_path,
             ssh_key=ssh_key,
             ssh_user=ssh_user,
+            skip_dependency_check=skip_dependency_check,
+            skip_syntax_check=skip_syntax_check,
         )
         result = deploy_pipeline(payload)
         deployment = result.get("deployment", {})

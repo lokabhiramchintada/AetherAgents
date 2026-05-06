@@ -8,7 +8,12 @@ PID_DIR="$ROOT_DIR/.run/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
 echo "[1/6] Starting infra containers (Kafka, master node, VMs, nginx)..."
-docker compose -f "$ROOT_DIR/infra/docker-compose.platform.yml" up -d
+#if already running, restart to ensure they're up-to-date with the latest config
+if docker compose -f "$ROOT_DIR/infra/docker-compose.platform.yml" ps -q | grep -q .; then
+  docker compose -f "$ROOT_DIR/infra/docker-compose.platform.yml" restart
+else
+  docker compose -f "$ROOT_DIR/infra/docker-compose.platform.yml" up -d
+fi
 
 echo "[2/6] Preparing Python env (local)..."
 python -m venv "$ROOT_DIR/.venv"
@@ -19,12 +24,14 @@ pip install \
   python-dotenv==1.0.0 email-validator==2.2.0 \
   kafka-python==2.0.2 pyyaml==6.0 requests==2.31.0 \
   jinja2==3.1.2 paramiko==3.4.0 sqlalchemy==2.0.31 \
-  bcrypt==4.1.3 python-jose==3.3.0 >/dev/null
+  bcrypt==4.1.3 python-jose==3.3.0 \
+  python-multipart==0.0.9 psycopg2-binary==2.9.9 >/dev/null
 
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export AETHER_APP_HEALTH_CHECKER_URL="${AETHER_APP_HEALTH_CHECKER_URL:-http://localhost:8015}"
 export AETHER_LIFECYCLE_MANAGER_URL="${AETHER_LIFECYCLE_MANAGER_URL:-http://localhost:8016}"
 export AETHER_NOTIFICATION_SERVICE_URL="${AETHER_NOTIFICATION_SERVICE_URL:-http://localhost:8019}"
+export DATABASE_URL="${DATABASE_URL:-sqlite:///$ROOT_DIR/.run/aether.db}"
 export PYTHONPATH="$ROOT_DIR"
 
 if [[ -f "$ROOT_DIR/.env" ]]; then
@@ -45,7 +52,36 @@ run_service() {
   echo $! > "$pid_file"
 }
 
+stop_service() {
+  local name="$1"
+  local pid_file="$PID_DIR/$name.pid"
+  if [[ -f "$pid_file" ]]; then
+    local pid
+    pid="$(cat "$pid_file")"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  - stopping $name (pid $pid)"
+      kill "$pid" 2>/dev/null || true
+      for _ in {1..10}; do
+        if kill -0 "$pid" 2>/dev/null; then
+          sleep 0.3
+        else
+          break
+        fi
+      done
+    fi
+    rm -f "$pid_file"
+  fi
+}
+
 echo "[3/6] Starting backend subsystems..."
+stop_service "user_management"
+stop_service "app_validator"
+stop_service "app_registry"
+stop_service "vm_health_checker"
+stop_service "app_health_checker"
+stop_service "lifecycle_manager"
+stop_service "notification_service"
+stop_service "gateway"
 run_service "user_management" "aether.subsystems.user_management.service" 8001
 run_service "app_validator" "aether.subsystems.app_validator.service" 8011
 run_service "app_registry" "aether.subsystems.app_registry.app_registry" 8012
@@ -58,7 +94,8 @@ run_service "gateway" "aether.gateway.app" 8000
 echo "[4/6] Starting platform UI..."
 pushd "$ROOT_DIR/aether/dashboard" >/dev/null
 npm install >/dev/null
-nohup npm run dev -- --host 0.0.0.0 --port 3000 >"$LOG_DIR/dashboard.log" 2>&1 &
+stop_service "dashboard"
+nohup npm run dev -- --host 0.0.0.0 --port 3000 --strictPort >"$LOG_DIR/dashboard.log" 2>&1 &
 echo $! > "$PID_DIR/dashboard.pid"
 popd >/dev/null
 
@@ -73,6 +110,6 @@ done
 echo "[6/6] Platform bootstrapped."
 echo "Gateway: http://localhost:8000"
 echo "Dashboard UI: http://localhost:3000"
-echo "Nginx LB: http://localhost"
+echo "Nginx LB: http://localhost:8080"
 echo "Kafka: localhost:9092"
 echo "Master node shared repo mount: /shared-repo (inside aether-master-node)"

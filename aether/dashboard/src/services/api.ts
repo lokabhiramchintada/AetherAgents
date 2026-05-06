@@ -5,7 +5,7 @@
  * Gateway v1 endpoints are available under /v1 for deployment orchestration.
  */
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
 export const auth = {
   getToken: (): string | null => localStorage.getItem("aether_token"),
@@ -90,12 +90,22 @@ export const api = {
     return res.json();
   },
 
-  deployApp: async (file: File, onStatusUpdate: (status: string) => void) => {
+  deployApp: async (
+    file: File,
+    onStatusUpdate: (status: string) => void,
+    options?: { skipDependencyCheck?: boolean; skipSyntaxCheck?: boolean }
+  ) => {
     onStatusUpdate("Uploading ZIP to Gateway...");
     const formData = new FormData();
     formData.append("file", file);
     formData.append("vm_pool_path", "infra/vm_pool.json");
     formData.append("ssh_user", "ubuntu");
+    if (options?.skipDependencyCheck !== undefined) {
+      formData.append("skip_dependency_check", String(options.skipDependencyCheck));
+    }
+    if (options?.skipSyntaxCheck !== undefined) {
+      formData.append("skip_syntax_check", String(options.skipSyntaxCheck));
+    }
 
     const res = await fetch(`${BASE_URL}/v1/apps/deploy/upload`, {
       method: "POST",
