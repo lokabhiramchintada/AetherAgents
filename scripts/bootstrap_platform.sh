@@ -62,18 +62,18 @@ python3 -m venv "$ROOT_DIR/.venv"
 source "$ROOT_DIR/.venv/bin/activate"
 pip install --upgrade pip >/dev/null
 pip install \
-  fastapi==0.104.0 uvicorn==0.24.0 pydantic==2.5.0 \
+  fastapi==0.110.0 uvicorn==0.24.0 pydantic==2.9.2 anyio==4.8.0 \
   python-dotenv==1.0.0 email-validator==2.2.0 \
   kafka-python==2.0.2 pyyaml==6.0 requests==2.31.0 \
   jinja2==3.1.2 paramiko==3.4.0 sqlalchemy==2.0.31 \
   bcrypt==4.1.3 python-jose==3.3.0 psycopg2-binary==2.9.9 \
-  python-multipart==0.0.6 httpx==0.28.1 >/dev/null
+  python-multipart==0.0.6 httpx==0.28.1 google-genai==1.75.0 >/dev/null
 
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export AETHER_APP_HEALTH_CHECKER_URL="${AETHER_APP_HEALTH_CHECKER_URL:-http://localhost:8015}"
 export AETHER_LIFECYCLE_MANAGER_URL="${AETHER_LIFECYCLE_MANAGER_URL:-http://localhost:8016}"
 export AETHER_NOTIFICATION_SERVICE_URL="${AETHER_NOTIFICATION_SERVICE_URL:-http://localhost:8019}"
-export DATABASE_URL="${DATABASE_URL:-postgresql://aether:aether_pass@localhost:5433/aetherdb}"
+export DATABASE_URL="${DATABASE_URL:-sqlite:///$ROOT_DIR/.run/aether.db}"
 export AETHER_USER_MANAGEMENT_URL="${AETHER_USER_MANAGEMENT_URL:-http://localhost:8001}"
 export AETHER_APP_VALIDATOR_URL="${AETHER_APP_VALIDATOR_URL:-http://localhost:8011}"
 export AETHER_APP_REGISTRY_STORAGE_DIR="${AETHER_APP_REGISTRY_STORAGE_DIR:-$ROOT_DIR/.run/storage}"
@@ -98,6 +98,35 @@ run_service() {
   echo $! > "$pid_file"
 }
 
+stop_port() {
+  local port="$1"
+  local pids=""
+
+  if command -v lsof >/dev/null 2>&1; then
+    pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+  elif command -v ss >/dev/null 2>&1; then
+    pids="$(ss -lntp "sport = :$port" 2>/dev/null | awk -F'pid=|,' '/pid=/{print $2}' | sort -u)"
+  fi
+
+  for pid in $pids; do
+    [[ -n "$pid" ]] || continue
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  - freeing port $port (pid $pid)"
+      kill "$pid" 2>/dev/null || true
+      for _ in {1..10}; do
+        if kill -0 "$pid" 2>/dev/null; then
+          sleep 0.3
+        else
+          break
+        fi
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    fi
+  done
+}
+
 stop_service() {
   local name="$1"
   local pid_file="$PID_DIR/$name.pid"
@@ -120,6 +149,14 @@ stop_service() {
 }
 
 echo "[3/6] Starting backend subsystems..."
+stop_port 8001
+stop_port 8011
+stop_port 8012
+stop_port 8013
+stop_port 8015
+stop_port 8016
+stop_port 8019
+stop_port 8000
 stop_service "user_management"
 stop_service "app_validator"
 stop_service "app_registry"
@@ -141,6 +178,7 @@ echo "[4/6] Starting platform UI..."
 pushd "$ROOT_DIR/aether/dashboard" >/dev/null
 npm install >/dev/null
 stop_service "dashboard"
+stop_port 3000
 nohup npm run dev -- --host 0.0.0.0 --port 3000 --strictPort >"$LOG_DIR/dashboard.log" 2>&1 &
 echo $! > "$PID_DIR/dashboard.pid"
 popd >/dev/null

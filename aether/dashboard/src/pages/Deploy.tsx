@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
 
@@ -11,11 +11,25 @@ export default function Deploy() {
   const [deployError, setDeployError] = useState<string | null>(null);
   const [skipDependencyCheck, setSkipDependencyCheck] = useState(true);
   const [skipSyntaxCheck, setSkipSyntaxCheck] = useState(false);
+  const [secretsText, setSecretsText] = useState("");
   const [validationResult, setValidationResult] = useState<{
     passed: boolean;
     errors: string[];
     warnings: string[];
   } | null>(null);
+
+  const secretsError = useMemo(() => {
+    if (!secretsText.trim()) return null;
+    try {
+      const parsed = JSON.parse(secretsText);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return "Secrets must be a JSON object.";
+      }
+      return null;
+    } catch (err) {
+      return "Secrets must be valid JSON.";
+    }
+  }, [secretsText]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -38,9 +52,14 @@ export default function Deploy() {
     setIsDeploying(true);
     setDeployError(null);
     try {
+      if (secretsError) {
+        setDeployError(secretsError);
+        return;
+      }
       await api.deployApp(file, (newStatus) => setStatus(newStatus), {
         skipDependencyCheck,
         skipSyntaxCheck,
+        secrets: secretsText.trim() ? secretsText : undefined,
       });
       alert("Deployment successful!");
       navigate("/dashboard");
@@ -54,7 +73,7 @@ export default function Deploy() {
   };
 
   const buttonDisabled =
-    !file || isDeploying || isValidating || (validationResult !== null && !validationResult.passed);
+    !file || isDeploying || isValidating || !!secretsError || (validationResult !== null && !validationResult.passed);
 
   return (
     <div style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
@@ -142,6 +161,26 @@ export default function Deploy() {
                 </ul>
               </div>
             )}
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "bold" }}>
+              Secrets (JSON, optional)
+            </label>
+            <textarea
+              value={secretsText}
+              onChange={(event) => setSecretsText(event.target.value)}
+              placeholder='{"OPENAI_API_KEY":"sk-..."}'
+              style={{ width: "100%", minHeight: "110px", fontFamily: "monospace", padding: "0.75rem", borderRadius: "6px", border: "1px solid #d1d5db" }}
+            />
+            {secretsError && (
+              <div style={{ marginTop: "0.5rem", color: "#b91c1c", fontSize: "0.875rem" }}>
+                {secretsError}
+              </div>
+            )}
+            <div style={{ marginTop: "0.5rem", color: "#6b7280", fontSize: "0.85rem" }}>
+              Secrets are saved with the uploaded version and injected at run time.
+            </div>
           </div>
 
           {status && (

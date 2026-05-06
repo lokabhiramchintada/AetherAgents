@@ -33,6 +33,17 @@ app.add_middleware(
 app.include_router(v1_router)
 
 
+@app.get("/")
+def root() -> dict:
+    return {
+        "status": "ok",
+        "service": "gateway",
+        "health": "/health",
+        "contracts": "/v1/contracts",
+        "docs": "/docs",
+    }
+
+
 def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
     redacted = {}
     sensitive = {"authorization", "cookie", "x-api-key"}

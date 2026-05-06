@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, auth } from '../services/api';
 
@@ -9,6 +9,9 @@ export default function AppDetail() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [runOutput, setRunOutput] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.isLoggedIn()) {
@@ -34,13 +37,14 @@ export default function AppDetail() {
   const health = app?.health ?? {};
   const cli = app?.cli ?? {};
   const processes = status?.processes ?? [];
-  const healthTargets = health?.targets ?? [];
   const metricCards = useMemo(() => ([
     { label: 'Processes', value: status?.process_count ?? 0 },
     { label: 'Healthy Targets', value: health?.healthy_count ?? 0 },
     { label: 'Degraded Targets', value: health?.degraded_count ?? 0 },
     { label: 'Avg Response', value: health?.avg_response_time_ms != null ? `${health.avg_response_time_ms} ms` : 'n/a' },
   ]), [status, health]);
+
+  const requestBody = useMemo(() => cli?.request_body ?? {}, [cli]);
 
   const handleAction = async (action: 'start' | 'stop' | 'restart' | 'scale') => {
     if (!id) return;
@@ -54,6 +58,21 @@ export default function AppDetail() {
       setError(err?.message ?? `Failed to ${action}`);
     } finally {
       setActionBusy(null);
+    }
+  };
+
+  const handleRun = async () => {
+    if (!id) return;
+    setRunBusy(true);
+    setRunError(null);
+    setRunOutput(null);
+    try {
+      const response = await api.runApp(id, requestBody);
+      setRunOutput(JSON.stringify(response, null, 2));
+    } catch (err: any) {
+      setRunError(err?.message ?? 'Run failed');
+    } finally {
+      setRunBusy(false);
     }
   };
 
@@ -73,8 +92,20 @@ export default function AppDetail() {
   const appName = app?.name ?? id;
   const appVersion = app?.version ?? app?.status?.app_version ?? 'unknown';
   const isRegistered = app?.status?.registered ?? false;
-  const statusLabel = isRegistered ? (health?.down_count > 0 ? 'Degraded' : 'Healthy') : 'Unregistered';
-  const statusColor = statusLabel === 'Healthy' ? '#10b981' : statusLabel === 'Degraded' ? '#f59e0b' : '#6b7280';
+  const processStatuses = processes.map((process: any) => process.status);
+  let statusLabel = 'Unregistered';
+  if (isRegistered) {
+    if (processStatuses.some((status: string) => status === 'crashed' || status === 'unhealthy')) {
+      statusLabel = 'Degraded';
+    } else if (processStatuses.length > 0 && processStatuses.every((status: string) => status === 'stopped')) {
+      statusLabel = 'Stopped';
+    } else if (processStatuses.some((status: string) => status === 'starting')) {
+      statusLabel = 'Starting';
+    } else {
+      statusLabel = 'Healthy';
+    }
+  }
+  const statusColor = statusLabel === 'Healthy' ? '#10b981' : statusLabel === 'Degraded' ? '#f59e0b' : statusLabel === 'Stopped' ? '#ef4444' : '#6b7280';
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
@@ -121,11 +152,25 @@ export default function AppDetail() {
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div>
             <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Primary run request</div>
-            <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{cli.curl_command ?? `curl -sS -X POST http://localhost:8001/run -H 'Content-Type: application/json' -d '{"raw_email":"Can we reschedule tomorrow's meeting?"}'`}</div>
+            <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{cli.proxy_curl_command ?? cli.curl_command ?? `curl -sS -X POST http://localhost:8000/v1/apps/${id}/run -H 'Content-Type: application/json' -d '{"raw_email":"Can we reschedule tomorrow's meeting?"}'`}</div>
           </div>
           <div>
             <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Request body</div>
-            <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{cli.request_body ? JSON.stringify(cli.request_body) : `{"raw_email":"Can we reschedule tomorrow's meeting?"}`}</div>
+            <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{JSON.stringify(requestBody)}</div>
+          </div>
+          <div>
+            <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Run sample</div>
+            <button
+              onClick={handleRun}
+              disabled={runBusy}
+              style={{ marginTop: '0.5rem', backgroundColor: '#2563eb', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', opacity: runBusy ? 0.7 : 1 }}
+            >
+              {runBusy ? 'Running...' : 'Run via Gateway'}
+            </button>
+            {runError && <div style={{ marginTop: '0.75rem', color: '#fca5a5' }}>{runError}</div>}
+            {runOutput && (
+              <pre style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#0f172a', borderRadius: '6px', color: '#e2e8f0', overflowX: 'auto' }}>{runOutput}</pre>
+            )}
           </div>
           <div>
             <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Per-node run routes</div>

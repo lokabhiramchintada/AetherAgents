@@ -111,7 +111,8 @@ class AppDeployerService:
                     ssh_key=ssh_key,
                     ssh_user=ssh_user,
                 )
-
+            self._register_deployment_with_health_checker(deployment)
+            self._register_deployment_with_lifecycle_manager(deployment)
             self._publish_deployed_event(deployment)
 
             deployment.status = DeploymentStatus.SUCCEEDED

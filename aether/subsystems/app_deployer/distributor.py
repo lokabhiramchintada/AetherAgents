@@ -113,6 +113,18 @@ class VMPool:
             )
 
         return normalized
+
+    @staticmethod
+    def _normalize_role(role: Optional[str]) -> Optional[str]:
+        if not role:
+            return role
+        mapping = {
+            "agents": "agent",
+            "tools": "tool",
+            "models": "model",
+            "orchestrators": "orchestrator",
+        }
+        return mapping.get(role, role)
     
     def find_healthy_vm(self, role: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -135,12 +147,18 @@ class VMPool:
                 "latency_ms": 2.5,
             }
         """
-        # Filter healthy VMs with matching role
-        candidates = [
-            vm for vm in self.vms
-            if vm.get("status") == "healthy"
-            and (role is None or role in vm.get("roles", []))
-        ]
+        normalized_role = self._normalize_role(role)
+        candidates = []
+        for vm in self.vms:
+            if vm.get("status") != "healthy":
+                continue
+            vm_roles = {self._normalize_role(r) for r in vm.get("roles", [])}
+            if normalized_role is None or normalized_role in vm_roles:
+                candidates.append(vm)
+
+        if not candidates and normalized_role is not None:
+            logger.warning("No healthy VM matching role '%s'; falling back to any healthy VM", role)
+            candidates = [vm for vm in self.vms if vm.get("status") == "healthy"]
         
         if not candidates:
             return None

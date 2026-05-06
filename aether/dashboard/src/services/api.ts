@@ -87,7 +87,7 @@ export const api = {
   deployApp: async (
     file: File,
     onStatusUpdate: (status: string) => void,
-    options?: { skipDependencyCheck?: boolean; skipSyntaxCheck?: boolean }
+    options?: { skipDependencyCheck?: boolean; skipSyntaxCheck?: boolean; secrets?: string }
   ) => {
     onStatusUpdate("Uploading ZIP to Gateway...");
     const formData = new FormData();
@@ -99,6 +99,9 @@ export const api = {
     }
     if (options?.skipSyntaxCheck !== undefined) {
       formData.append("skip_syntax_check", String(options.skipSyntaxCheck));
+    }
+    if (options?.secrets) {
+      formData.append("secrets", options.secrets);
     }
 
     const res = await fetch(`${BASE_URL}/v1/apps/deploy/upload`, {
@@ -139,6 +142,31 @@ export const api = {
       body: JSON.stringify({ action, replicas }),
     });
     if (!res.ok) throw new Error(`Failed to ${action} app`);
+    return res.json();
+  },
+
+  runApp: async (id: string, payload: Record<string, unknown>) => {
+    const res = await fetch(`${BASE_URL}/v1/apps/${id}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Run failed" }));
+      throw new Error(err.detail ?? "Run failed");
+    }
+    return res.json();
+  },
+
+  deleteApp: async (id: string) => {
+    const res = await fetch(`${BASE_URL}/v1/apps/${id}`, { method: "DELETE" });
+    if (res.status === 404) {
+      throw new Error("App not found");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Delete failed" }));
+      throw new Error(err.detail ?? "Delete failed");
+    }
     return res.json();
   },
 };

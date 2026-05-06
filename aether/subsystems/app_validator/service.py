@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import zipfile
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,6 +31,13 @@ app.add_middleware(
 )
 
 # Mocked: You can expand these imports over time
+def _select_source_root(extract_dir: Path) -> Path:
+    children = [path for path in extract_dir.iterdir() if path.name not in {"__MACOSX"}]
+    if len(children) == 1 and children[0].is_dir():
+        return children[0]
+    return extract_dir
+
+
 def validate_metadata(app_name, app_version):
     """Mocks metadata validation (semver, slug checks)"""
     errors = []
@@ -68,17 +76,19 @@ async def validate_app_zip(file: UploadFile = File(...)):
             shutil.rmtree(temp_dir)
             return ValidationReport(passed=False, errors=["Uploaded file is not a valid zip archive."])
 
+        source_root = _select_source_root(Path(extract_dir))
+
         # 2. Run validations
         all_errors = []
         all_warnings = []
 
         # A: Structure check
-        struct_errs, struct_warns = validate_structure(extract_dir)
+        struct_errs, struct_warns = validate_structure(str(source_root))
         all_errors.extend(struct_errs)
         all_warnings.extend(struct_warns)
 
         # B: Config check
-        config_errs, app_name, app_version = validate_config(extract_dir)
+        config_errs, app_name, app_version = validate_config(str(source_root))
         all_errors.extend(config_errs)
 
         # C: Metadata check

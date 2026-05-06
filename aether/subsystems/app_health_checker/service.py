@@ -146,42 +146,46 @@ class HealthCheckerService:
             self._consumer_thread.join(timeout=2.0)
 
     def _consume_loop(self) -> None:
-        try:
-            from kafka import KafkaConsumer  # type: ignore
-
-            consumer = KafkaConsumer(
-                topics.APP_DEPLOYED,
-                bootstrap_servers=self.kafka_bootstrap_servers,
-                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-                auto_offset_reset="latest",
-                enable_auto_commit=True,
-                group_id="aether-app-health-checker",
-            )
-        except Exception as exc:
-            logger.warning("Kafka consumer unavailable in health checker: %s", exc)
-            return
-
         while not self._consumer_stop.is_set():
-            message_pack = consumer.poll(timeout_ms=1000)
-            for _tp, messages in message_pack.items():
-                for message in messages:
-                    payload = message.value or {}
-                    if payload.get("event_type") != "app.deployed":
-                        continue
-                    deployment = payload.get("deployment", {})
-                    app_id = deployment.get("app_id")
-                    app_version = deployment.get("app_version", "unknown")
-                    for process in deployment.get("process_records", []):
-                        req = RegisterTargetRequest(
-                            app_id=app_id,
-                            app_version=app_version,
-                            artifact_id=process.get("artifact_id", ""),
-                            vm_ip=process.get("vm_ip", ""),
-                            port=process.get("port", 0),
-                        )
-                        self.register(req)
-                        logger.info("Auto-registered target from app.deployed: %s/%s", app_id, req.artifact_id)
-        consumer.close()
+            consumer = None
+            try:
+                from kafka import KafkaConsumer  # type: ignore
+
+                consumer = KafkaConsumer(
+                    topics.APP_DEPLOYED,
+                    bootstrap_servers=self.kafka_bootstrap_servers,
+                    value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                    auto_offset_reset="latest",
+                    enable_auto_commit=True,
+                    group_id="aether-app-health-checker",
+                )
+
+                while not self._consumer_stop.is_set():
+                    message_pack = consumer.poll(timeout_ms=1000)
+                    for _tp, messages in message_pack.items():
+                        for message in messages:
+                            payload = message.value or {}
+                            if payload.get("event_type") != "app.deployed":
+                                continue
+                            deployment = payload.get("deployment", {})
+                            app_id = deployment.get("app_id")
+                            app_version = deployment.get("app_version", "unknown")
+                            for process in deployment.get("process_records", []):
+                                req = RegisterTargetRequest(
+                                    app_id=app_id,
+                                    app_version=app_version,
+                                    artifact_id=process.get("artifact_id", ""),
+                                    vm_ip=process.get("vm_ip", ""),
+                                    port=process.get("port", 0),
+                                )
+                                self.register(req)
+                                logger.info("Auto-registered target from app.deployed: %s/%s", app_id, req.artifact_id)
+            except Exception as exc:
+                logger.warning("Kafka consumer unavailable in health checker (retrying): %s", exc)
+                self._consumer_stop.wait(5.0)
+            finally:
+                if consumer:
+                    consumer.close()
 
 
 app = FastAPI(title="Aether App Health Checker", version="1.0.0")

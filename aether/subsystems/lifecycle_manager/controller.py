@@ -60,6 +60,13 @@ class LifecycleController:
         deployment = self._deployment_from_dict(payload)
         self.register_deployment(deployment)
 
+    def unregister_deployment(self, app_id: str) -> bool:
+        if app_id not in self.deployments:
+            return False
+        self.deployments.pop(app_id, None)
+        self._save_state()
+        return True
+
     def _process_from_dict(self, process: dict, app_id: str, app_version: str) -> ProcessRecord:
         return ProcessRecord(
             app_id=app_id,
@@ -166,9 +173,37 @@ class LifecycleController:
         return LifecycleActionResult(app_id, "restart", "ok", message)
 
     def scale(self, app_id: str, replicas: int) -> LifecycleActionResult:
-        self._require_deployment(app_id)
+        deployment = self._require_deployment(app_id)
+        current = len(deployment.process_records)
+
+        if current == 0:
+            return LifecycleActionResult(app_id, "scale", "ok", "No processes to scale")
+
+        if replicas == current:
+            return LifecycleActionResult(app_id, "scale", "ok", f"Already at replicas={replicas}")
+
+        if replicas < current:
+            deployment.process_records = deployment.process_records[:replicas]
+            self._save_state()
+            return LifecycleActionResult(app_id, "scale", "ok", f"Scaled down to replicas={replicas}")
+
+        base = deployment.process_records[0]
+        for idx in range(replicas - current):
+            deployment.process_records.append(
+                ProcessRecord(
+                    app_id=base.app_id,
+                    app_version=base.app_version,
+                    artifact_id=base.artifact_id,
+                    artifact_type=base.artifact_type,
+                    vm_ip=base.vm_ip,
+                    port=base.port + current + idx,
+                    systemd_service=base.systemd_service,
+                    status=ProcessStatus.RUNNING,
+                )
+            )
+
         self._save_state()
-        return LifecycleActionResult(app_id, "scale", "ok", f"Scale request accepted for replicas={replicas}")
+        return LifecycleActionResult(app_id, "scale", "ok", f"Scaled up to replicas={replicas}")
 
     def rollback(self, app_id: str, target_version: str) -> LifecycleActionResult:
         self._require_deployment(app_id)
