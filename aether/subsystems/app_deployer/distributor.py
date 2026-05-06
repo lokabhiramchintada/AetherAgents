@@ -65,13 +65,54 @@ class VMPool:
         self.vms: List[Dict[str, Any]] = []
     
     def load_from_file(self, vm_pool_path: Path) -> None:
-        """Load VM pool from JSON file."""
+        """
+        Load VM pool from JSON file.
+
+        Supports:
+        1) Platform format:
+           {"vms":[{"name","ip","roles","status",...}]}
+        2) Credential-centric format:
+           {"server": {...}, "vms":[{"name","ip","user","password"}]}
+        """
         with open(vm_pool_path, "r") as f:
             import json
             data = json.load(f)
-            self.vms = data.get("vms", [])
+            self.vms = self._normalize_vm_records(data)
         
         logger.info(f"Loaded {len(self.vms)} VMs from pool")
+
+    def _normalize_vm_records(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        server_defaults = data.get("server", {}) if isinstance(data, dict) else {}
+        normalized: List[Dict[str, Any]] = []
+
+        for index, vm in enumerate(data.get("vms", [])):
+            ip = vm.get("ip") or vm.get("host")
+            if not ip:
+                logger.warning("Skipping VM #%s with no ip/host field", index + 1)
+                continue
+
+            roles = vm.get("roles")
+            if not roles:
+                # Default to all roles when not specified in credentials-style file.
+                roles = ["agent", "tool", "orchestrator", "model"]
+
+            normalized.append(
+                {
+                    "name": vm.get("name", f"vm-{index+1}"),
+                    "ip": ip,
+                    "roles": roles,
+                    "status": vm.get("status", "healthy"),
+                    "cpu_pct": vm.get("cpu_pct", 10.0),
+                    "ram_pct": vm.get("ram_pct", 20.0),
+                    "latency_ms": vm.get("latency_ms", 1.0),
+                    "user": vm.get("user", server_defaults.get("user", "ubuntu")),
+                    "password": vm.get("password", server_defaults.get("password")),
+                    "port": vm.get("port", 22),
+                    "ssh_key": vm.get("ssh_key"),
+                }
+            )
+
+        return normalized
     
     def find_healthy_vm(self, role: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -213,6 +254,10 @@ class Distributor:
                 vm = vm_assignments[node_id]
                 node["vm_ip"] = vm.get("ip")
                 node["vm_name"] = vm.get("name")
+                node["vm_user"] = vm.get("user", "ubuntu")
+                node["vm_password"] = vm.get("password")
+                node["vm_port"] = vm.get("port", 22)
+                node["vm_ssh_key"] = vm.get("ssh_key")
             else:
                 logger.warning(f"No VM assigned to {node_id}")
         

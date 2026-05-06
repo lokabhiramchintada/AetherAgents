@@ -253,12 +253,21 @@ class AppDeployerService:
         ssh_key: Optional[Path] = None,
         ssh_user: str = "ubuntu",
     ) -> None:
-        logger.info("Connecting to %s as %s...", vm_ip, ssh_user)
+        vm_user = nodes[0].get("vm_user", ssh_user) if nodes else ssh_user
+        vm_password = nodes[0].get("vm_password") if nodes else None
+        vm_port = int(nodes[0].get("vm_port", 22)) if nodes else 22
+        vm_ssh_key = nodes[0].get("vm_ssh_key") if nodes else None
+
+        resolved_key = vm_ssh_key or (str(ssh_key) if ssh_key else None)
+
+        logger.info("Connecting to %s:%s as %s...", vm_ip, vm_port, vm_user)
 
         ssh = SSHConnection(
             hostname=vm_ip,
-            username=ssh_user,
-            key_filename=str(ssh_key) if ssh_key else None,
+            username=vm_user,
+            password=vm_password,
+            port=vm_port,
+            key_filename=resolved_key,
         )
         ssh.connect()
 
