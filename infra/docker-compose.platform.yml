@@ -52,3 +52,18 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aether-postgres
+    environment:
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: aether_pass
+      POSTGRES_DB: aetherdb
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aether"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

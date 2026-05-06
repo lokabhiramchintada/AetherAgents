@@ -8,7 +8,8 @@ from pathlib import Path
 
 app = FastAPI()
 
-BASE_DIR = os.path.abspath("storage")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+BASE_DIR = os.path.abspath(os.getenv("AETHER_APP_REGISTRY_STORAGE_DIR", str(REPO_ROOT / ".run" / "storage")))
 APPS_DIR = os.path.join(BASE_DIR, "apps")
 PLATFORM_DIR = os.path.join(BASE_DIR, "platform")
 

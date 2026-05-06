@@ -56,27 +56,21 @@ export const api = {
   },
 
   getApps: async () => {
-    return new Promise((resolve) =>
-      setTimeout(
-        () =>
-          resolve([
-            { id: "app-001", name: "Email Classifier", version: "1.0.0", status: "Healthy", nodes: 2 },
-            { id: "app-002", name: "Data Scraper", version: "2.1.0", status: "Degraded", nodes: 1 },
-          ]),
-        300
-      )
-    );
+    const res = await fetch(`${BASE_URL}/v1/apps`);
+    if (!res.ok) {
+      throw new Error("Failed to fetch apps");
+    }
+
+    const payload = await res.json();
+    return Array.isArray(payload) ? payload : payload.apps ?? [];
   },
 
   getAppDetails: async (id: string) => {
-    const statusRes = await fetch(`${BASE_URL}/v1/apps/${id}/status`).catch(() => null);
-    if (statusRes && statusRes.ok) return statusRes.json();
-
-    return {
-      app_id: id,
-      registered: false,
-      message: "No deployment registered",
-    };
+    const res = await fetch(`${BASE_URL}/v1/apps/${id}/overview`);
+    if (!res.ok) {
+      throw new Error("Failed to fetch app details");
+    }
+    return res.json();
   },
 
   validateApp: async (file: File): Promise<{ passed: boolean; errors: string[]; warnings: string[] }> => {
@@ -138,11 +132,11 @@ export const api = {
     return res.json();
   },
 
-  appAction: async (id: string, action: "start" | "stop" | "restart") => {
-    const res = await fetch(`${BASE_URL}/apps/${id}/${action}`, {
+  appAction: async (id: string, action: "start" | "stop" | "restart" | "scale", replicas?: number) => {
+    const res = await fetch(`${BASE_URL}/v1/apps/${id}/lifecycle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ action, replicas }),
     });
     if (!res.ok) throw new Error(`Failed to ${action} app`);
     return res.json();

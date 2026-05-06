@@ -24,11 +24,12 @@ NOTE: Until the Gateway is implemented this service runs on port 8000 directly.
 import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import Base, engine
@@ -93,6 +94,65 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
+    redacted = {}
+    sensitive = {"authorization", "cookie", "x-api-key"}
+    for key, value in headers.items():
+        redacted[key] = "[REDACTED]" if key.lower() in sensitive else value
+    return redacted
+
+
+def _safe_log_body(content_type: str | None, body: bytes, limit: int = 2048):
+    if not body:
+        return None
+    if content_type and "application/json" in content_type:
+        try:
+            payload = json.loads(body.decode("utf-8"))
+            if isinstance(payload, dict):
+                for key in ("password", "token", "authorization", "secret", "api_key"):
+                    if key in payload:
+                        payload[key] = "[REDACTED]"
+            return payload
+        except Exception:
+            pass
+    text = body.decode("utf-8", errors="replace")
+    return text[:limit] + ("..." if len(text) > limit else "")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    started_at = time.perf_counter()
+    body = await request.body()
+    logger.info(
+        "request start method=%s path=%s query=%s headers=%s body=%s",
+        request.method,
+        request.url.path,
+        request.url.query,
+        _redact_headers(dict(request.headers)),
+        _safe_log_body(request.headers.get("content-type"), body),
+    )
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(request.scope, receive)
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("request error method=%s path=%s", request.method, request.url.path)
+        raise
+
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    logger.info(
+        "request end method=%s path=%s status=%s duration_ms=%.2f",
+        request.method,
+        request.url.path,
+        getattr(response, "status_code", 0),
+        duration_ms,
+    )
+    return response
 
 
 @app.get("/health")

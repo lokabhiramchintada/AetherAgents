@@ -10,10 +10,11 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Optional
 
-from aether.subsystems.app_deployer.models import DeploymentRecord, ProcessStatus
 from aether.kafka import topics
+from aether.subsystems.app_deployer.models import DeploymentRecord, DeploymentStatus, ProcessRecord, ProcessStatus
 
 logger = logging.getLogger("aether.lifecycle_manager.controller")
 
@@ -40,36 +41,83 @@ class LifecycleController:
         self.notification_url = os.getenv("AETHER_NOTIFICATION_SERVICE_URL", "http://localhost:8019").rstrip("/")
         self.alert_email = os.getenv("AETHER_ALERT_EMAIL", "")
         self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+        repo_root = Path(__file__).resolve().parents[3]
+        self.state_path = Path(
+            os.getenv(
+                "AETHER_LIFECYCLE_STATE_PATH",
+                str(repo_root / ".run" / "storage" / "deployments.json"),
+            )
+        )
         self._kafka_producer = None
         self._init_kafka_producer()
+        self._load_state()
 
     def register_deployment(self, deployment: DeploymentRecord) -> None:
         self.deployments[deployment.app_id] = deployment
+        self._save_state()
 
     def register_deployment_dict(self, payload: dict) -> None:
-        deployment = DeploymentRecord(
-            app_id=payload.get("app_id", ""),
-            app_version=payload.get("app_version", ""),
-        )
-        for process in payload.get("process_records", []):
-            deployment.process_records.append(
-                self._process_from_dict(process, deployment.app_id, deployment.app_version)
-            )
+        deployment = self._deployment_from_dict(payload)
         self.register_deployment(deployment)
 
-    def _process_from_dict(self, process: dict, app_id: str, app_version: str):
-        from aether.subsystems.app_deployer.models import ProcessRecord
-
+    def _process_from_dict(self, process: dict, app_id: str, app_version: str) -> ProcessRecord:
         return ProcessRecord(
             app_id=app_id,
             app_version=app_version,
             artifact_id=process.get("artifact_id", ""),
             artifact_type=process.get("artifact_type", ""),
             vm_ip=process.get("vm_ip", ""),
+            vm_name=process.get("vm_name", ""),
             port=process.get("port", 0),
+            pid=process.get("pid"),
             systemd_service=process.get("systemd_service", ""),
+            created_at=process.get("created_at", 0.0),
+            started_at=process.get("started_at"),
+            stopped_at=process.get("stopped_at"),
             status=ProcessStatus(process.get("status", ProcessStatus.RUNNING.value)),
+            last_health_check=process.get("last_health_check"),
+            health_check_failures=process.get("health_check_failures", 0),
+            error_message=process.get("error_message", ""),
         )
+
+    def _deployment_from_dict(self, payload: dict) -> DeploymentRecord:
+        deployment = DeploymentRecord(
+            deployment_id=payload.get("deployment_id", ""),
+            app_id=payload.get("app_id", ""),
+            app_version=payload.get("app_version", ""),
+            distribution_mode=payload.get("distribution_mode", ""),
+            status=DeploymentStatus(payload.get("status", DeploymentStatus.PENDING.value)),
+            created_at=payload.get("created_at", 0.0),
+            started_at=payload.get("started_at"),
+            completed_at=payload.get("completed_at"),
+            previous_version=payload.get("previous_version"),
+            error_message=payload.get("error_message", ""),
+        )
+        for process in payload.get("process_records", []):
+            deployment.process_records.append(
+                self._process_from_dict(process, deployment.app_id, deployment.app_version)
+            )
+        return deployment
+
+    def _load_state(self) -> None:
+        if not self.state_path.exists():
+            return
+        try:
+            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
+            for item in payload.get("deployments", []):
+                deployment = self._deployment_from_dict(item)
+                self.deployments[deployment.app_id] = deployment
+            logger.info("Loaded %s lifecycle deployments from %s", len(self.deployments), self.state_path)
+        except Exception as exc:
+            logger.warning("Failed to load lifecycle state from %s: %s", self.state_path, exc)
+
+    def _save_state(self) -> None:
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"deployments": [deployment.to_dict() for deployment in self.deployments.values()]}
+            self.state_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Failed to save lifecycle state to %s: %s", self.state_path, exc)
 
     def status(self, app_id: str) -> dict:
         deployment = self.deployments.get(app_id)
@@ -91,12 +139,14 @@ class LifecycleController:
         deployment = self._require_deployment(app_id)
         for process in deployment.process_records:
             process.status = ProcessStatus.RUNNING
+        self._save_state()
         return LifecycleActionResult(app_id, "start", "ok", f"Started {len(deployment.process_records)} processes")
 
     def stop(self, app_id: str, app_version: Optional[str] = None) -> LifecycleActionResult:
         deployment = self._require_deployment(app_id)
         for process in deployment.process_records:
             process.status = ProcessStatus.STOPPED
+        self._save_state()
         return LifecycleActionResult(app_id, "stop", "ok", f"Stopped {len(deployment.process_records)} processes")
 
     def restart(self, app_id: str, app_version: Optional[str] = None, reason: str = "") -> LifecycleActionResult:
@@ -112,10 +162,12 @@ class LifecycleController:
             app_version=app_version or deployment.app_version,
             detail=reason or "Automatic restart from lifecycle manager",
         )
+        self._save_state()
         return LifecycleActionResult(app_id, "restart", "ok", message)
 
     def scale(self, app_id: str, replicas: int) -> LifecycleActionResult:
         self._require_deployment(app_id)
+        self._save_state()
         return LifecycleActionResult(app_id, "scale", "ok", f"Scale request accepted for replicas={replicas}")
 
     def rollback(self, app_id: str, target_version: str) -> LifecycleActionResult:

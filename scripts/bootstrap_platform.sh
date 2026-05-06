@@ -7,6 +7,38 @@ PID_DIR="$ROOT_DIR/.run/pids"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+# Stop any previously started services from earlier runs (clean PIDs and dev servers)
+if [ -d "$PID_DIR" ]; then
+  echo "[0/6] Stopping previous platform services (if any)..."
+  for f in "$PID_DIR"/*.pid; do
+    [ -f "$f" ] || continue
+    pid=$(cat "$f" 2>/dev/null || true)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "  - stopping pid $pid (from $f)"
+      kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$f" 2>/dev/null || true
+  done
+fi
+
+# Kill any dev servers that might be occupying typical dashboard ports
+for port in 3000 3001 3002 3003; do
+  pids=$(lsof -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    echo "  - killing processes listening on :$port -> $pids"
+    kill $pids 2>/dev/null || kill -9 $pids 2>/dev/null || true
+  fi
+done
+
+# Ensure log and pid directories are writable by current user
+if [ ! -w "$LOG_DIR" ] || [ ! -w "$PID_DIR" ]; then
+  echo "Error: $LOG_DIR or $PID_DIR is not writable by $(whoami)."
+  echo "If these are owned by root from a previous run, fix with:" 
+  echo "  sudo chown -R $(whoami) \"$ROOT_DIR/.run\""
+  echo "Then re-run scripts/bootstrap_platform.sh as your normal user (no sudo)."
+  exit 1
+fi
+
 echo "[1/6] Starting infra containers (Kafka, master node, VMs, nginx)..."
 #if already running, restart to ensure they're up-to-date with the latest config
 if docker compose -f "$ROOT_DIR/infra/docker-compose.platform.yml" ps -q | grep -q .; then
@@ -16,7 +48,17 @@ else
 fi
 
 echo "[2/6] Preparing Python env (local)..."
-python -m venv "$ROOT_DIR/.venv"
+# If a previous .venv exists and is not writable, fail fast with instructions
+if [ -d "$ROOT_DIR/.venv" ] && [ ! -w "$ROOT_DIR/.venv" ]; then
+  echo "Error: .venv exists but is not writable by $(whoami)."
+  echo "If this directory is owned by root from a previous run, remove or chown it:" 
+  echo "  sudo rm -rf $ROOT_DIR/.venv"
+  echo "  sudo chown -R $(whoami) $ROOT_DIR/.venv"
+  echo "Then re-run scripts/bootstrap_platform.sh as your normal user (no sudo)."
+  exit 1
+fi
+
+python3 -m venv "$ROOT_DIR/.venv"
 source "$ROOT_DIR/.venv/bin/activate"
 pip install --upgrade pip >/dev/null
 pip install \
@@ -24,14 +66,18 @@ pip install \
   python-dotenv==1.0.0 email-validator==2.2.0 \
   kafka-python==2.0.2 pyyaml==6.0 requests==2.31.0 \
   jinja2==3.1.2 paramiko==3.4.0 sqlalchemy==2.0.31 \
-  bcrypt==4.1.3 python-jose==3.3.0 \
-  python-multipart==0.0.9 psycopg2-binary==2.9.9 >/dev/null
+  bcrypt==4.1.3 python-jose==3.3.0 psycopg2-binary==2.9.9 \
+  python-multipart==0.0.6 httpx==0.28.1 >/dev/null
 
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export AETHER_APP_HEALTH_CHECKER_URL="${AETHER_APP_HEALTH_CHECKER_URL:-http://localhost:8015}"
 export AETHER_LIFECYCLE_MANAGER_URL="${AETHER_LIFECYCLE_MANAGER_URL:-http://localhost:8016}"
 export AETHER_NOTIFICATION_SERVICE_URL="${AETHER_NOTIFICATION_SERVICE_URL:-http://localhost:8019}"
-export DATABASE_URL="${DATABASE_URL:-sqlite:///$ROOT_DIR/.run/aether.db}"
+export DATABASE_URL="${DATABASE_URL:-postgresql://aether:aether_pass@localhost:5433/aetherdb}"
+export AETHER_USER_MANAGEMENT_URL="${AETHER_USER_MANAGEMENT_URL:-http://localhost:8001}"
+export AETHER_APP_VALIDATOR_URL="${AETHER_APP_VALIDATOR_URL:-http://localhost:8011}"
+export AETHER_APP_REGISTRY_STORAGE_DIR="${AETHER_APP_REGISTRY_STORAGE_DIR:-$ROOT_DIR/.run/storage}"
+export AETHER_APP_REGISTRY_DIR="${AETHER_APP_REGISTRY_DIR:-$ROOT_DIR/.run/storage/apps}"
 export PYTHONPATH="$ROOT_DIR"
 
 if [[ -f "$ROOT_DIR/.env" ]]; then
